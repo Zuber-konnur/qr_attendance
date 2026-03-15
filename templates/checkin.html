@@ -9,8 +9,8 @@
         body { background: #f0f2f5; height: 100vh; display: flex; align-items: center; justify-content: center; font-family: sans-serif; }
         .checkin-card { background: white; width: 90%; max-width: 400px; padding: 30px; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); text-align: center; }
         .icon-circle { width: 70px; height: 70px; background: #eef2ff; color: #4361ee; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 24px; }
-        input[type="text"] { border-radius: 12px; padding: 12px; border: 2px solid #eee; text-align: center; font-size: 1.1rem; font-weight: bold; text-transform: uppercase; }
-        input[type="text"]:focus { border-color: #4361ee; box-shadow: none; }
+        input[type="text"], select { border-radius: 12px; padding: 12px; border: 2px solid #eee; text-align: center; font-size: 1.1rem; font-weight: bold; }
+        input[type="text"]:focus, select:focus { border-color: #4361ee; box-shadow: none; }
         .btn-submit { background: #4361ee; color: white; border: none; padding: 12px; border-radius: 12px; font-weight: 600; width: 100%; transition: 0.3s; }
         .btn-submit:disabled { opacity: 0.6; }
     </style>
@@ -20,7 +20,7 @@
 <div class="checkin-card">
     <div class="icon-circle">📍</div>
     <h3 class="fw-bold mb-1">Student Check-in</h3>
-    <p class="text-muted small mb-4">Please verify your location and enter USN</p>
+    <p class="text-muted small mb-4">Location & Time Based Scanning</p>
 
     <form id="attendanceForm">
         <input type="hidden" name="token" value="{{ token }}">
@@ -28,26 +28,51 @@
         <input type="hidden" name="lon" id="lon">
 
         <div class="mb-3">
-            <input type="text" name="usn" class="form-control" placeholder="Enter USN" required>
+            <input type="text" name="usn" class="form-control text-uppercase" placeholder="Enter USN" required>
         </div>
 
         <div id="nameContainer" class="mb-4 d-none">
-            <input type="text" name="name" id="nameField" class="form-control" placeholder="Enter Full Name">
-            <p class="text-primary small mt-1">First time scanning? Please register.</p>
+            <input type="text" name="name" id="nameField" class="form-control mb-2" placeholder="Full Name">
+            
+            <select name="domain" id="domainField" class="form-select mb-2">
+                <option value="">Select Domain</option>
+                {% for d in domains %}
+                <option value="{{ d }}">{{ d }}</option>
+                {% endfor %}
+            </select>
+            
+            <select name="batch" id="batchField" class="form-select mb-2">
+                <option value="">Select Batch</option>
+                {% for b in batches %}
+                <option value="{{ b }}">{{ b }}</option>
+                {% endfor %}
+            </select>
+
+            <p class="text-primary small mt-2">First time scanning? Please register.</p>
         </div>
 
-        <button type="submit" id="submitBtn" class="btn-submit">Submit Attendance</button>
+        <button type="submit" id="submitBtn" class="btn-submit">Submit Scan</button>
     </form>
     <div id="statusMsg" class="mt-3 small"></div>
 </div>
 
 <script>
+if (window.history.replaceState) {
+    const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+    window.history.replaceState({path: cleanUrl}, '', cleanUrl);
+}
 function getDeviceId() {
-    let deviceId = localStorage.getItem("device_id");
-    if (!deviceId) {
-        deviceId = crypto.randomUUID();
-        localStorage.setItem("device_id", deviceId);
-    }
+    let cookieMatch = document.cookie.match(/(?:^|; )device_id=([^;]*)/);
+    let deviceId = cookieMatch ? cookieMatch[1] : null;
+
+    if (!deviceId) deviceId = localStorage.getItem("device_id");
+    if (!deviceId) deviceId = crypto.randomUUID();
+
+    localStorage.setItem("device_id", deviceId);
+    let d = new Date();
+    d.setTime(d.getTime() + (400 * 24 * 60 * 60 * 1000));
+    document.cookie = "device_id=" + deviceId + ";expires=" + d.toUTCString() + ";path=/;SameSite=Lax";
+
     return deviceId;
 }
 
@@ -59,7 +84,7 @@ navigator.geolocation.getCurrentPosition(
         document.getElementById("statusMsg").className = "mt-3 small text-success";
     },
     function(err) {
-        document.getElementById("statusMsg").innerHTML = "❌ Please enable GPS to check in";
+        document.getElementById("statusMsg").innerHTML = "❌ Please enable GPS to scan";
         document.getElementById("statusMsg").className = "mt-3 small text-danger";
     }
 );
@@ -82,31 +107,18 @@ document.getElementById("attendanceForm").onsubmit = function(e){
         method: "POST",
         body: formData
     }).then(r=>r.json()).then(data=>{
-        // Handle new user logic
         if(data.status === "new_user"){
             document.getElementById("nameContainer").classList.remove("d-none");
             document.getElementById("nameField").setAttribute("required", "true");
+            document.getElementById("domainField").setAttribute("required", "true");
+            document.getElementById("batchField").setAttribute("required", "true");
             alert(data.message);
-        } 
-        // Handle 7-hour early warning
-        else if (data.status === "early") {
-            alert(data.message);
-        }
-        else if(data.status === "confirm_logout"){
-            if(confirm(data.message)){
-                fetch("/logout", {
-                    method: "POST",
-                    body: formData
-                }).then(r=>r.json()).then(res=>{
-                    alert(res.message);
-                    window.location.reload();
-                });
-            }
         } else {
             alert(data.message);
+            if(data.status === "success") window.location.reload();
         }
         btn.disabled = false;
-        btn.innerText = "Submit Attendance";
+        btn.innerText = "Submit Scan";
         submitted = false;
     });
 };

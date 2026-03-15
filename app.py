@@ -1,82 +1,52 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, make_response
 import os
-from datetime import datetime, timedelta
-import pyotp
 import calendar
 import pandas as pd
 import io
+import pyotp
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 from supabase import create_client, Client
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo # Add this import
 from dotenv import load_dotenv
-load_dotenv()
 
+load_dotenv()
 app = Flask(__name__)
 
 # ---------------- CONFIG ----------------
-
-
-
-# Replace with your Supabase credentials
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 SHARED_SECRET = os.getenv("SHARED_SECRET")
 totp = pyotp.TOTP(SHARED_SECRET, interval=30)
-REQUIRED_HOURS = int(os.getenv("REQUIRED_HOURS", 7))
 
 CLASSROOM_POLYGON = [
-    (15.778169, 74.460522),  #vtu
-    (15.778282, 74.465453),
-    (15.774238, 74.466045),
-    (15.774311, 74.459154)
+    (15.778169, 74.460522), (15.778282, 74.465453),
+    (15.774238, 74.466045), (15.774311, 74.459154)
 ]
-# CLASSROOM_POLYGON = [
-#     (15.877109, 74.519842),
-#     (15.878934, 74.520693),
-#     (15.877820, 74.523730),
-#     (15.874640, 74.521714)
-# ]
+
 app.secret_key = os.getenv("SECRET_KEY")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+REQUIRED_HOURS = int(os.getenv("REQUIRED_HOURS", 7))
 
-# --- AUTH DECORATOR ---
+
+
+# ---------------- HELPERS ----------------
 def login_required(f):
     def wrapper(*args, **kwargs):
-        if not session.get("logged_in"):
-            return redirect(url_for("admin_login"))
+        if not session.get("logged_in"): return redirect(url_for("admin_login"))
         return f(*args, **kwargs)
     wrapper.__name__ = f.__name__
     return wrapper
 
 def get_ist_now():
-    """Returns the current time in Indian Standard Time"""
     return datetime.now(ZoneInfo("Asia/Kolkata"))
-
-@app.route('/admin/login', methods=["GET", "POST"])
-def admin_login():
-    if request.method == "POST":
-        password = request.form.get("password")
-        if password == ADMIN_PASSWORD:
-            session["logged_in"] = True
-            return redirect(url_for("admin_dashboard"))
-        return render_template("login.html", error="Invalid Password")
-    return render_template("login.html")
-
-@app.route('/admin/logout')
-def admin_logout():
-    session.pop("logged_in", None)
-    return redirect(url_for("admin_login"))
-
-# ---------------- GEOFENCE ----------------
 
 def point_in_polygon(lat, lon, polygon):
     x, y = lon, lat
     inside = False
     n = len(polygon)
     p1x, p1y = polygon[0][1], polygon[0][0]
-
     for i in range(n + 1):
         p2x, p2y = polygon[i % n][1], polygon[i % n][0]
         if y > min(p1y, p2y):
@@ -90,184 +60,278 @@ def point_in_polygon(lat, lon, polygon):
     return inside
 
 # ---------------- PUBLIC ROUTES ----------------
-
 @app.route('/')
-def index():
+def index(): 
     return render_template("index.html")
 
 @app.route('/get_token')
 def get_token():
-    return jsonify({
-        "token": totp.now(),
-        "expires_in": 30 - (int(datetime.now().timestamp()) % 30)
-    })
+    return jsonify({"token": totp.now(), "expires_in": 30 - (int(datetime.now().timestamp()) % 30)})
 
 @app.route('/checkin')
 def checkin():
-    token = request.args.get("token")
-    return render_template("checkin.html", token=token)
+    domains_res = supabase.table("domains").select("name").execute()
+    batches_res = supabase.table("batches").select("name").execute()
+    return render_template(
+        "checkin.html", 
+        token=request.args.get("token"),
+        domains=[d['name'] for d in domains_res.data],
+        batches=[b['name'] for b in batches_res.data]
+    )
 
-# ---------------- CORE LOGIC (LOGIN / LOGOUT) ----------------
-
+# ---------------- CORE LOGIC (STATE MACHINE) ----------------
 @app.route('/submit', methods=["POST"])
 def submit():
     usn = request.form.get("usn", "").strip().upper()
     name = request.form.get("name", "").strip()
+    domain = request.form.get("domain", "").strip()
+    batch = request.form.get("batch", "").strip()
     token = request.form.get("token")
     device_id = request.form.get("device_id")
 
-    if not device_id:
-        return jsonify({"status": "error", "message": "Device ID missing"})
-
+    if not device_id: return jsonify({"status": "error", "message": "Device ID missing"})
+    if not totp.verify(token, valid_window=1): return jsonify({"status": "error", "message": "QR Expired"})
+    
     try:
-        lat = float(request.form.get("lat"))
-        lon = float(request.form.get("lon"))
+        lat, lon = float(request.form.get("lat")), float(request.form.get("lon"))
+        if not point_in_polygon(lat, lon, CLASSROOM_POLYGON):
+            return jsonify({"status": "error", "message": "Outside Classroom Area"})
     except:
         return jsonify({"status": "error", "message": "GPS Missing"})
 
-    if not totp.verify(token, valid_window=1):
-        return jsonify({"status": "error", "message": "QR Expired"})
+    now = get_ist_now()
+    today_str = now.strftime("%Y-%m-%d")
+    current_time = now.time()
+    current_time_str = now.strftime("%H:%M:%S")
 
-    if not point_in_polygon(lat, lon, CLASSROOM_POLYGON):
-        return jsonify({"status": "error", "message": "Outside Classroom Area"})
-
-    # 1. Dynamic User Registration
-    user_res = supabase.table("users").select("*").eq("usn", usn).execute()
-    if not user_res.data:
-        if not name:
-            return jsonify({"status": "new_user", "message": "USN not found. Enter your name to register."})
-        supabase.table("users").insert({"usn": usn, "name": name}).execute()
-
-    today = get_ist_now().strftime("%Y-%m-%d")
-    att_res = supabase.table("attendance").select("*").eq("usn", usn).eq("date", today).execute()
-    record = att_res.data[0] if att_res.data else None
-
-    # FIRST LOGIN
-    if not record:
-        device_used = supabase.table("attendance").select("*").eq("date", today).eq("device_id", device_id).execute()
-        if device_used.data:
-            return jsonify({"status": "error", "message": "This device already used today."})
-
-        supabase.table("attendance").insert({
-            "usn": usn, "date": today, "login_time": get_ist_now().strftime("%H:%M:%S"),
-            "status": "On Duty", "device_id": device_id
-        }).execute()
-        return jsonify({"status": "login", "message": "Login Successful"})
-
-    # ASK LOGOUT WITH 7 HOUR LOCK
-    elif record.get("logout_time") is None:
-        if record.get("device_id") != device_id:
-            return jsonify({"status": "error", "message": "Logout allowed only from same device."})
-
-        login_dt = datetime.strptime(f"{today} {record['login_time']}", "%Y-%m-%d %H:%M:%S")
-        elapsed = get_ist_now().replace(tzinfo=None) - login_dt
-        required_delta = timedelta(hours=REQUIRED_HOURS)
-
-        if elapsed < required_delta:
-            remaining = required_delta - elapsed
-            rem_hrs, rem_mins = divmod(remaining.seconds // 60, 60)
+    # Strict 1 Device = 1 User Per Day Check
+    device_check = supabase.table("attendance").select("usn").eq("date", today_str).eq("device_id", device_id).execute()
+    if device_check.data:
+        used_by_usns = set(row['usn'] for row in device_check.data)
+        if usn not in used_by_usns or len(used_by_usns) > 1:
             return jsonify({
-                "status": "early", 
-                "message": f"Too early! You must stay for {REQUIRED_HOURS} hours. Remaining: {rem_hrs}h {rem_mins}m"
+                "status": "error", 
+                "message": "Security Alert: This device has already been used by another student today."
             })
 
-        return jsonify({"status": "confirm_logout", "message": "7 hours completed. Logout now?"})
+    # Dynamic User Registration
+    user_res = supabase.table("users").select("*").eq("usn", usn).execute()
+    if not user_res.data:
+        if not name or not domain or not batch: 
+            return jsonify({"status": "new_user", "message": "Enter your details to register."})
+        supabase.table("users").insert({"usn": usn, "name": name, "domain": domain, "batch": batch}).execute()
 
-    # COMPLETED
-    else:
-        return jsonify({"status": "done", "message": "Attendance Already Completed"})
-
-@app.route('/logout', methods=["POST"])
-def logout():
-    usn = request.form.get("usn", "").strip().upper()
-    device_id = request.form.get("device_id")
-    today = get_ist_now().strftime("%Y-%m-%d")
-
-    att_res = supabase.table("attendance").select("*").eq("usn", usn).eq("date", today).execute()
+    att_res = supabase.table("attendance").select("*").eq("usn", usn).eq("date", today_str).execute()
     record = att_res.data[0] if att_res.data else None
 
-    if not record or record.get("device_id") != device_id:
-        return jsonify({"status": "error", "message": "Logout not allowed."})
+    # ACTION 1: Morning Login
+    if not record:
+        if current_time >= time(13, 30):
+            return jsonify({"status": "error", "message": "Too late for morning login."})
+        supabase.table("attendance").insert({
+            "usn": usn, "date": today_str, "login_time": current_time_str,
+            "status": "On Duty", "device_id": device_id
+        }).execute()
+        return jsonify({"status": "success", "message": "Morning Login Successful!"})
 
-    supabase.table("attendance").update({
-        "logout_time": get_ist_now().strftime("%H:%M:%S"), "status": "P"
-    }).eq("usn", usn).eq("date", today).execute()
+    # ACTION 2: Lunch Start (13:20 - 13:50)
+    if time(13, 20) <= current_time <= time(13, 50):
+        if record.get("lunch_start"): return jsonify({"status": "error", "message": "Lunch start already recorded."})
+        supabase.table("attendance").update({"lunch_start": current_time_str}).eq("id", record["id"]).execute()
+        return jsonify({"status": "success", "message": "Lunch Break Started."})
 
-    return jsonify({"status": "success", "message": "Logout Successful"})
+    # ACTION 3: Lunch End (14:15 - 14:45)
+    if time(14, 15) <= current_time <= time(14, 45):
+        if not record.get("lunch_start"): return jsonify({"status": "error", "message": "You didn't scan for Lunch Start!"})
+        if record.get("lunch_end"): return jsonify({"status": "error", "message": "Lunch end already recorded."})
+        supabase.table("attendance").update({"lunch_end": current_time_str}).eq("id", record["id"]).execute()
+        return jsonify({"status": "success", "message": "Lunch Break Ended. Welcome back."})
 
-# ---------------- ADMIN DASHBOARD & CSV ----------------
+    # ACTION 4: Final Logout (16:00 onwards)
+    if current_time >= time(16, 0):
+        if record.get("logout_time"): 
+            return jsonify({"status": "done", "message": "Already logged out for today."})
+        
+        settings_res = supabase.table("admin_settings").select("*").execute()
+        settings = {row['setting_key']: row['setting_value'] for row in settings_res.data}
+
+        if settings.get('require_minimum_hours', True):
+            # REQUIRED_HOURS = 7
+            login_time_obj = datetime.strptime(record['login_time'], "%H:%M:%S").time()
+            login_dt = datetime.combine(now.date(), login_time_obj)
+            elapsed = now.replace(tzinfo=None) - login_dt
+            required_delta = timedelta(hours=REQUIRED_HOURS)
+
+            if elapsed < required_delta:
+                remaining = required_delta - elapsed
+                rem_hrs, rem_mins = divmod(remaining.seconds // 60, 60)
+                return jsonify({
+                    "status": "error", 
+                    "message": f"Too early! You must complete {REQUIRED_HOURS} hours. Remaining: {rem_hrs}h {rem_mins}m"
+                })
+
+        has_start = bool(record.get("lunch_start"))
+        has_end = bool(record.get("lunch_end"))
+
+        if settings.get('strict_lunch', True):
+            if not has_start or not has_end:
+                return jsonify({"status": "error", "message": "Cannot logout: Lunch scans are missing!"})
+
+        remarks_list = []
+        if not has_start and not has_end: remarks_list.append("Missed both lunch scans")
+        elif has_start and not has_end: remarks_list.append("Missed lunch end scan")
+        elif not has_start and has_end: remarks_list.append("Missed lunch start scan")
+        final_remark = ", ".join(remarks_list) if remarks_list else "Clear"
+
+        supabase.table("attendance").update({
+            "logout_time": current_time_str, "status": "P", "remarks": final_remark
+        }).eq("id", record["id"]).execute()
+        
+        return jsonify({"status": "success", "message": "Final Logout Successful. Have a good evening!"})
+
+    return jsonify({"status": "error", "message": "Scan is outside of permitted time windows."})
+
+# ---------------- ADMIN ROUTES ----------------
+@app.route('/admin/login', methods=["GET", "POST"])
+def admin_login():
+    if request.method == "POST":
+        if request.form.get("password") == ADMIN_PASSWORD:
+            session["logged_in"] = True
+            return redirect(url_for("admin_dashboard"))
+        return render_template("login.html", error="Invalid Password")
+    return render_template("login.html")
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop("logged_in", None)
+    return redirect(url_for("admin_login"))
 
 @app.route('/admin/dashboard')
 @login_required
 def admin_dashboard():
-    filter_val = request.args.get('filter', get_ist_now().strftime('%Y-%m-%d'))
+    filter_date = request.args.get('date', get_ist_now().strftime('%Y-%m-%d'))
+    filter_domain = request.args.get('domain', 'All')
+    filter_view = request.args.get('view', 'daily')
+
+    settings_res = supabase.table("admin_settings").select("*").execute()
+    settings = {row['setting_key']: row['setting_value'] for row in settings_res.data}
+
+    domains_res = supabase.table("domains").select("name").execute()
+    domains = [d['name'] for d in domains_res.data]
     
-    # FIX: Use .eq() instead of .like() because we are matching an exact DATE type
-    res = supabase.table("attendance").select("*, users(name)").eq("date", filter_val).order("login_time", desc=True).execute()
-    
-    # Flatten the result for the template
+    batches_res = supabase.table("batches").select("name").execute()
+    batches = [b['name'] for b in batches_res.data]
+
+    res = supabase.table("attendance").select("*, users(name, domain, batch)").eq("date", filter_date).execute()
+
     records = []
+    total_domain_count = 0
     for r in res.data:
-        r['name'] = r['users']['name'] if r.get('users') else "Unknown"
-        records.append(r)
+        user_data = r.get('users') or {}
+        r['name'] = user_data.get('name', 'Unknown')
+        r['domain'] = user_data.get('domain', 'N/A')
+        r['batch'] = user_data.get('batch', 'N/A')
         
-    return render_template("admin_dashboard.html", records=records, current_filter=filter_val)
+        if filter_domain == 'All' or r['domain'] == filter_domain:
+            records.append(r)
+            total_domain_count += 1
+            
+    return render_template(
+        "admin_dashboard.html", 
+        records=records, current_date=filter_date, current_domain=filter_domain, current_view=filter_view,
+        domains=domains, batches=batches, strict_lunch=settings.get('strict_lunch', True),
+        require_minimum_hours=settings.get('require_minimum_hours', True), total_count=total_domain_count
+    )
+
+@app.route('/admin/toggle_setting', methods=["POST"])
+@login_required
+def toggle_setting():
+    data = request.json
+    supabase.table("admin_settings").update({"setting_value": data.get("setting_value")}).eq("setting_key", data.get("setting_key")).execute()
+    return jsonify({"status": "success"})
+
+@app.route('/admin/manage_list', methods=["POST"])
+@login_required
+def manage_list():
+    data = request.json
+    table = "domains" if data.get('type') == 'domain' else "batches"
+    action = data.get('action')
+    name = data.get('name').strip()
+
+    if not name: return jsonify({"status": "error"})
+
+    if action == 'add': supabase.table(table).insert({"name": name}).execute()
+    elif action == 'delete': supabase.table(table).delete().eq("name", name).execute()
+        
+    return jsonify({"status": "success"})
 
 @app.route('/admin/upload_csv', methods=["POST"])
 @login_required
 def upload_users_csv():
-    if 'file' not in request.files: return redirect(url_for('admin_dashboard'))
-    file = request.files['file']
-    if file.filename == '': return redirect(url_for('admin_dashboard'))
-
-    df = pd.read_csv(file)
-    # Ensure column names match Supabase table (usn, name)
-    records = df[['USN', 'Name']].rename(columns={'USN': 'usn', 'Name': 'name'}).to_dict('records')
+    if 'file' not in request.files: 
+        return redirect(url_for('admin_dashboard'))
     
-    for rec in records:
-        supabase.table("users").upsert(rec).execute()
+    file = request.files['file']
+    if file.filename == '':
+        return redirect(url_for('admin_dashboard'))
+
+    try:
+        # 1. Read CSV and replace NaN (blanks) with empty strings
+        df = pd.read_csv(file).fillna("")
+        
+        # 2. Convert all headers to lowercase so it doesn't matter if you type 'USN' or 'usn'
+        df.columns = df.columns.str.lower()
+        
+        # 3. Ensure the required columns exist, fill missing ones if needed
+        required_cols = ['usn', 'name', 'domain', 'batch']
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = "" # Add missing column safely
+                
+        # 4. Filter only the required columns and convert to dictionary
+        records = df[required_cols].to_dict('records')
+        
+        for rec in records:
+            # Only upload if a USN actually exists in the row
+            if rec.get('usn'):
+                # Clean up the data before inserting
+                rec['usn'] = str(rec['usn']).strip().upper()
+                rec['name'] = str(rec['name']).strip()
+                rec['domain'] = str(rec['domain']).strip()
+                rec['batch'] = str(rec['batch']).strip()
+                
+                # Upsert into Supabase
+                supabase.table("users").upsert(rec).execute()
+                
+    except Exception as e:
+        print(f"CSV Upload Error: {e}") # This will print to your terminal if it fails
         
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/download_csv')
 @login_required
 def download_csv():
-    
-# New
-    filter_val = request.args.get('filter', get_ist_now().strftime('%Y-%m-%d'))
+    filter_date = request.args.get('date', get_ist_now().strftime('%Y-%m-%d'))
     mode = request.args.get('mode', 'full')
-    now = datetime.now()
+    now = get_ist_now()
 
-    try:
-        year, month = map(int, filter_val.split('-')[:2])
-    except:
-        year, month = now.year, now.month
+    try: year, month = map(int, filter_date.split('-')[:2])
+    except: year, month = now.year, now.month
 
-    # Calculate the last day of the month for our query
-    last_day_of_month = calendar.monthrange(year, month)[1]
+    last_day = calendar.monthrange(year, month)[1]
+    num_days = now.day if (year == now.year and month == now.month) else last_day
 
-    if year == now.year and month == now.month:
-        num_days = now.day
-    else:
-        num_days = last_day_of_month
-
-    # Fetch users from Supabase
-    users_res = supabase.table("users").select("name, usn").execute()
+    users_res = supabase.table("users").select("name, usn, domain, batch").execute()
     all_users = pd.DataFrame(users_res.data)
-    if not all_users.empty:
-        all_users.rename(columns={'name': 'Name', 'usn': 'USN'}, inplace=True)
-    else:
-        all_users = pd.DataFrame(columns=['Name', 'USN'])
+    if not all_users.empty: all_users.rename(columns={'name': 'Name', 'usn': 'USN', 'domain': 'Domain', 'batch': 'Batch'}, inplace=True)
+    else: all_users = pd.DataFrame(columns=['Name', 'USN', 'Domain', 'Batch'])
 
-    # FIX: Use date ranges (.gte and .lte) instead of .like() for PostgreSQL DATE types
-    start_date = f"{year}-{month:02d}-01"
-    end_date = f"{year}-{month:02d}-{last_day_of_month}"
-    
-    att_res = supabase.table("attendance").select("usn, date, login_time, logout_time, status").gte("date", start_date).lte("date", end_date).execute()
+    start_date, end_date = f"{year}-{month:02d}-01", f"{year}-{month:02d}-{last_day}"
+    att_res = supabase.table("attendance").select("*").gte("date", start_date).lte("date", end_date).execute()
     attendance_data = pd.DataFrame(att_res.data)
 
-    output = io.StringIO()
     final_df = all_users.copy()
+    output = io.StringIO()
 
     if not attendance_data.empty:
         for day in range(1, num_days + 1):
@@ -275,25 +339,27 @@ def download_csv():
             day_data = attendance_data[attendance_data['date'] == date_str].copy()
             
             if mode == 'full':
-                subset = day_data[['usn', 'login_time', 'logout_time', 'status']]
-                subset.columns = ['usn', f'{day}_Login', f'{day}_Logout', f'{day}_Status']
+                subset = day_data[['usn', 'login_time', 'lunch_start', 'lunch_end', 'logout_time', 'remarks', 'status']]
+                subset.columns = ['usn', f'{day}_Login', f'{day}_LunchOut', f'{day}_LunchIn', f'{day}_Logout', f'{day}_Remarks', f'{day}_Status']
+            elif mode == 'basic_remarks':
+                subset = day_data[['usn', 'login_time', 'logout_time', 'remarks', 'status']]
+                subset.columns = ['usn', f'{day}_Login', f'{day}_Logout', f'{day}_Remarks', f'{day}_Status']
             else:
                 subset = day_data[['usn', 'status']]
                 subset.columns = ['usn', f'{day}_Status']
             
-            final_df = pd.merge(final_df, subset, left_on='USN', right_on='usn', how='left')
-            final_df[f'{day}_Status'] = final_df[f'{day}_Status'].fillna('A')
-            if 'usn' in final_df.columns:
-                final_df.drop(columns=['usn'], inplace=True)
+            if not subset.empty:
+                final_df = pd.merge(final_df, subset, left_on='USN', right_on='usn', how='left')
+                if 'usn' in final_df.columns: final_df.drop(columns=['usn'], inplace=True)
+            if f'{day}_Status' in final_df.columns:
+                final_df[f'{day}_Status'] = final_df[f'{day}_Status'].fillna('A')
 
     final_df.to_csv(output, index=False)
-    
-    clean_date_label = f"{year}-{month:02d}"
-    filename = f"Attendance_{'Full' if mode == 'full' else 'Grid'}_{clean_date_label}.csv"
-    
     response = make_response(output.getvalue())
-    response.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    response.headers["Content-Disposition"] = f"attachment; filename=Attendance_{mode.capitalize()}_{year}-{month:02d}.csv"
     response.headers["Content-type"] = "text/csv"
     return response
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

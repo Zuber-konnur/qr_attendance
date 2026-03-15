@@ -7,118 +7,161 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root { --primary: #4361ee; --secondary: #3f37c9; --bg: #f8f9fd; --text: #2b2d42; }
-        body { background: var(--bg); font-family: 'Inter', system-ui, sans-serif; color: var(--text); }
-        .navbar-custom { background: white; border-bottom: 1px solid #e0e4e8; padding: 1rem 0; }
-        .card-stats { border: none; border-radius: 16px; background: linear-gradient(135deg, var(--primary), var(--secondary)); color: white; transition: transform 0.2s; }
-        .card-main { border: none; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.04); background: white; padding: 2rem; }
-        .table thead { background: #f8f9fa; color: #6c757d; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
-        .status-badge { padding: 6px 14px; border-radius: 8px; font-weight: 600; font-size: 0.75rem; }
-        .form-control, .btn { border-radius: 10px; }
-        .btn-export { background: #2ec4b6; color: white; border: none; }
-        .btn-export:hover { background: #23a89d; color: white; }
+        :root { --primary: #4361ee; --bg: #f8f9fd; }
+        body { background: var(--bg); font-family: 'Inter', sans-serif; }
+        .navbar-custom { background: white; padding: 1rem 0; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .card-main { border-radius: 16px; background: white; padding: 2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
+        .table thead { background: #f8f9fa; font-size: 0.8rem; text-transform: uppercase; }
+        .badge-time { background: #f1f5f9; color: #334155; font-weight: normal; }
     </style>
 </head>
 <body>
 
 <nav class="navbar-custom mb-4">
     <div class="container d-flex justify-content-between align-items-center">
-        <h3 class="fw-bold m-0"><i class="fas fa-id-badge text-primary me-2"></i>Attendance</h3>
+        <h4 class="fw-bold m-0"><i class="fas fa-shield-alt text-primary me-2"></i>Attendance Portal</h4>
         <div>
-            <a href="/" class="btn btn-light me-2"><i class="fas fa-qrcode me-1"></i> Public Screen</a>
+            <div class="form-check form-switch d-inline-block me-3">
+                <input class="form-check-input" type="checkbox" id="hoursToggle" 
+                       {% if require_minimum_hours %}checked{% endif %} 
+                       onchange="updateSetting('require_minimum_hours', this.checked)">
+                <label class="form-check-label fw-bold small" for="hoursToggle">Require 7 Hours</label>
+            </div>
+            <div class="form-check form-switch d-inline-block me-4">
+                <input class="form-check-input" type="checkbox" id="lunchToggle" 
+                       {% if strict_lunch %}checked{% endif %} onchange="updateSetting('strict_lunch', this.checked)">
+                <label class="form-check-label fw-bold small" for="lunchToggle">Strict Lunch Scans</label>
+            </div>
             <a href="/admin/logout" class="btn btn-outline-danger btn-sm">Logout</a>
         </div>
     </div>
 </nav>
 
 <div class="container">
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card-stats p-4">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <p class="mb-0 opacity-75">Total Students Marked</p>
-                        <h2 class="fw-bold mb-0">{{ records|length if records else 0 }}</h2>
-                    </div>
-                    <i class="fas fa-users fa-2x opacity-25"></i>
+  <!--  <div class="card-main p-3 mb-4 border-0">
+        <h6 class="fw-bold mb-3"><i class="fas fa-cogs text-secondary me-2"></i>System Lists Management</h6>
+        <div class="row g-2">
+            <div class="col-md-5">
+                <div class="input-group">
+                    <input type="text" id="newDomain" class="form-control" placeholder="New Domain Name">
+                    <button class="btn btn-outline-primary" onclick="manageList('domain', 'add', document.getElementById('newDomain').value)">Add Domain</button>
+                </div>
+            </div>
+            <div class="col-md-5">
+                <div class="input-group">
+                    <input type="text" id="newBatch" class="form-control" placeholder="New Batch Name">
+                    <button class="btn btn-outline-primary" onclick="manageList('batch', 'add', document.getElementById('newBatch').value)">Add Batch</button>
                 </div>
             </div>
         </div>
     </div>
-
+-->
     <div class="card-main mb-4">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-4">
-                <form action="/admin/dashboard" method="GET">
-                    <label class="form-label fw-bold small text-muted">DATE FILTER</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-white"><i class="fas fa-calendar-alt text-muted"></i></span>
-                        <input type="date" name="filter" class="form-control border-start-0" value="{{ current_filter }}" onchange="this.form.submit()">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <form action="/admin/dashboard" method="GET" class="row g-3 align-items-end" id="filterForm">
+                    <input type="hidden" name="view" value="{{ current_view }}">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small text-muted">DATE</label>
+                        <input type="date" name="date" class="form-control" value="{{ current_date }}" onchange="document.getElementById('filterForm').submit()">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label fw-bold small text-muted">DOMAIN LIST</label>
+                        <select name="domain" class="form-select" onchange="document.getElementById('filterForm').submit()">
+                            <option value="All" {% if current_domain == 'All' %}selected{% endif %}>All Domains</option>
+                            {% for d in domains %}
+                            <option value="{{ d }}" {% if current_domain == d %}selected{% endif %}>{{ d }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </form>
             </div>
             
-            <div class="col-md-8 text-md-end">
-                <form action="/admin/upload_csv" method="POST" enctype="multipart/form-data" class="d-inline-block me-2">
-                    <input type="file" name="file" id="csvFile" accept=".csv" class="d-none" onchange="this.form.submit()">
-                    <button type="button" class="btn btn-secondary px-4 py-2" onclick="document.getElementById('csvFile').click()">
-                        <i class="fas fa-upload me-2"></i>Upload Users
-                    </button>
-                </form>
-
-                <div class="dropdown d-inline-block">
-                    <button class="btn btn-export dropdown-toggle px-4 py-2" type="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-download me-2"></i>Export Records
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                        <li><a class="dropdown-item py-2" href="/admin/download_csv?filter={{ current_filter }}&mode=full"><i class="fas fa-file-alt me-2 text-muted"></i>Full Activity Log</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item py-2" href="/admin/download_csv?filter={{ current_filter }}&mode=status_only"><i class="fas fa-table me-2 text-muted"></i>Attendance Grid</a></li>
-                    </ul>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <div class="p-3 rounded bg-primary bg-opacity-10 text-primary d-inline-block text-start">
+                    <div class="small fw-bold text-uppercase">Total Marked Today</div>
+                    <div class="fs-4 fw-bold"><i class="fas fa-users me-2"></i>{{ total_count }}</div>
                 </div>
+            </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-top text-end">
+            <button type="button" class="btn btn-secondary me-2" onclick="document.getElementById('csvFile').click()">
+                <i class="fas fa-upload me-2"></i>Upload Users
+            </button>
+            <form action="/admin/upload_csv" method="POST" enctype="multipart/form-data" class="d-none">
+                <input type="file" name="file" id="csvFile" accept=".csv" onchange="this.form.submit()">
+            </form>
+
+            <div class="dropdown d-inline-block">
+                <button class="btn btn-primary dropdown-toggle px-4" type="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-download me-2"></i>Export Records
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                    <li><a class="dropdown-item py-2" href="/admin/download_csv?date={{ current_date }}&mode=full"><i class="fas fa-list-alt me-2 text-muted"></i>Full Log (Inc. Lunch)</a></li>
+                    <li><a class="dropdown-item py-2" href="/admin/download_csv?date={{ current_date }}&mode=basic_remarks"><i class="fas fa-clock me-2 text-muted"></i>Basic Log + Remarks</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item py-2" href="/admin/download_csv?date={{ current_date }}&mode=grid"><i class="fas fa-table me-2 text-muted"></i>Attendance Grid</a></li>
+                </ul>
             </div>
         </div>
     </div>
 
-    <div class="card-main">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h5 class="fw-bold m-0">Daily Logs: <span class="text-primary">{{ current_filter }}</span></h5>
-        </div>
+    <ul class="nav nav-tabs mb-3 border-bottom-0">
+        <li class="nav-item">
+            <a class="nav-link {% if current_view == 'daily' %}active bg-white fw-bold border-bottom-0 rounded-top{% else %}text-muted{% endif %}" href="/admin/dashboard?date={{ current_date }}&domain={{ current_domain }}&view=daily"><i class="fas fa-clock me-2"></i>Standard Logs</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link {% if current_view == 'lunch' %}active bg-white fw-bold border-bottom-0 rounded-top{% else %}text-muted{% endif %}" href="/admin/dashboard?date={{ current_date }}&domain={{ current_domain }}&view=lunch"><i class="fas fa-utensils me-2"></i>Lunch Logs</a>
+        </li>
+    </ul>
+
+    <div class="card-main border-top-0 rounded-top-0">
         <div class="table-responsive">
-            <table class="table table-hover align-middle">
+            <table class="table align-middle table-hover">
                 <thead>
                     <tr>
-                        <th>USN</th>
-                        <th>Student Name</th>
-                        <th>Date</th>
-                        <th><i class="fas fa-sign-in-alt text-success me-1"></i> Login</th>
-                        <th><i class="fas fa-sign-out-alt text-danger me-1"></i> Logout</th>
+                        <th>USN & Name</th>
+                        <th>Domain / Batch</th>
+                        <th>Login</th>
+                        {% if current_view == 'lunch' %}
+                        <th class="bg-light text-primary">Lunch Out</th>
+                        <th class="bg-light text-primary">Lunch In</th>
+                        {% endif %}
+                        <th>Logout</th>
                         <th>Status</th>
+                        <th>Remarks</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in records %}
                     <tr>
-                        <td class="fw-bold text-dark">{{ row.usn }}</td>
-                        <td>{{ row.name }}</td>
-                        <td class="text-muted small">{{ row.date }}</td>
-                        <td><span class="badge bg-light text-dark fw-normal">{{ row.login_time }}</span></td>
-                        <td><span class="badge bg-light text-dark fw-normal">{{ row.logout_time or '--:--' }}</span></td>
                         <td>
-                            {% if row.status == 'P' %}
-                            <span class="status-badge bg-success-subtle text-success">Present</span>
-                            {% else %}
-                            <span class="status-badge bg-info-subtle text-info">On Duty</span>
-                            {% endif %}
+                            <div class="fw-bold text-dark">{{ row.usn }}</div>
+                            <div class="small text-muted">{{ row.name }}</div>
+                        </td>
+                        <td>
+                            <span class="badge bg-primary bg-opacity-10 text-primary">{{ row.domain }}</span>
+                            <span class="badge bg-secondary bg-opacity-10 text-secondary">{{ row.batch }}</span>
+                        </td>
+                        <td><span class="badge badge-time">{{ row.login_time }}</span></td>
+                        {% if current_view == 'lunch' %}
+                        <td class="bg-light"><span class="badge badge-time border">{{ row.lunch_start or '--:--' }}</span></td>
+                        <td class="bg-light"><span class="badge badge-time border">{{ row.lunch_end or '--:--' }}</span></td>
+                        {% endif %}
+                        <td><span class="badge badge-time">{{ row.logout_time or '--:--' }}</span></td>
+                        <td>
+                            {% if row.status == 'P' %}<span class="badge bg-success">Present</span>
+                            {% else %}<span class="badge bg-info">On Duty</span>{% endif %}
+                        </td>
+                        <td>
+                            {% if row.remarks == 'Clear' %}<span class="text-success small fw-bold"><i class="fas fa-check-circle me-1"></i>Clear</span>
+                            {% elif row.remarks %}<span class="text-danger small fw-bold"><i class="fas fa-exclamation-triangle me-1"></i>{{ row.remarks }}</span>
+                            {% else %}<span class="text-muted small">--</span>{% endif %}
                         </td>
                     </tr>
                     {% else %}
-                    <tr>
-                        <td colspan="6" class="text-center py-5">
-                            <i class="fas fa-folder-open fa-3x text-light mb-3 d-block"></i>
-                            <span class="text-muted">No records found for this period.</span>
-                        </td>
-                    </tr>
+                    <tr><td colspan="8" class="text-center py-5 text-muted">No records found.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -127,5 +170,27 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function updateSetting(key, isChecked) {
+    fetch('/admin/toggle_setting', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({setting_key: key, setting_value: isChecked})
+    });
+}
+
+function manageList(type, action, name) {
+    if(!name) return;
+    fetch('/admin/manage_list', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type: type, action: action, name: name})
+    }).then(r => r.json()).then(res => {
+        if(res.status === 'success') {
+            window.location.reload();
+        }
+    });
+}
+</script>
 </body>
 </html>
