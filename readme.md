@@ -1,50 +1,175 @@
-# Smart QR Attendance System
+# 📱 Smart QR Attendance System
 
-An automated, location-aware, and anti-spoofing attendance tracking application built with **Flask**, **Supabase (PostgreSQL)**, and **Bootstrap 5**. The system utilizes time-windowed OTP tokens generated via QR codes and cross-references user geofences and hardware fingerprints to eliminate proxy attendance.
+An automated, location-aware, and anti-spoofing attendance tracking application built with **Flask**, **Supabase (PostgreSQL)**, and **Bootstrap 5**.
 
----
+The platform utilizes:
+- 🔐 Time-windowed OTP QR validation
+- 📍 GPS geofencing verification
+- 🛡️ Device fingerprint protection
+- ⚡ Real-time attendance state tracking
 
-## 🚀 Features
-
-### 🏢 Student Check-in Features
-- **Dynamic QR Validation:** Generates a secure TOTP token via a shared secret that expires every 30 seconds to prevent static URL sharing.
-- **Geofencing (GPS Verification):** Checks student coordinates against a configured bounding polygon using the Ray-Casting algorithm.
-- **Anti-Proxy Protection:** Binds a unique `device_id` (using secure browser cookies and localStorage) to a student's USN. Prevents a single physical device from registering multiple attendees in a single day.
-- **Dynamic Registration:** New users are automatically prompted to register their Name, Domain, and Batch details on their very first scan.
-
-### 🛠️ Admin Dashboard Features
-- **Attendance States:** Tracks individual entry sequences through 4 specific daily windows:
-  1. *Morning Login* (Permitted up to 13:30)
-  2. *Lunch Start* (13:20 - 13:50)
-  3. *Lunch End* (14:15 - 14:45)
-  4. *Final Logout* (16:00 onwards)
-- **Live Governance Controls:**
-  - Toggle strict enforcement of standard working hours (Minimum 7 hours calculation).
-  - Toggle mandatory compliance for midday lunch breakout logs.
-- **Data & Roster Processing:**
-  - Bulk roster loading via CSV upserts (auto-deduplicates records and provisions missing tracking metadata safely).
-  - Matrix log extraction in three customized exports (Full Logs, Basic Logs + Remarks, or Status Grid).
+This ensures highly secure and proxy-resistant attendance management for classrooms, labs, and institutional environments.
 
 ---
 
-## 🛠️ System Architecture & Workflow
+# 🚀 Features
 
-1. **Display Portal (`/`):** A public display route streams shifting 30-second windowed dynamic uniform resource parameters.
-2. **Scan Handshake (`/checkin`):** The student's device verifies core GPS coordinates locally, captures hardware browser instances, and passes parameters securely via POST.
-3. **Evaluation Loop (`/submit`):** The engine executes a multi-point validation pipeline:
-   - Token integrity validation window ($t \pm 30s$).
-   - Device availability state checks.
-   - Spatial polygon intersection calculation.
-   - Time-window slot allocation logic.
+# 🏢 Student Check-in Features
+
+## 🔄 Dynamic QR Validation
+
+The system generates secure rotating QR tokens using **TOTP (Time-Based One-Time Passwords)**.
+
+### Security Characteristics
+- Tokens expire every **30 seconds**
+- Prevents:
+  - Static QR reuse
+  - Screenshot forwarding
+  - Shared attendance links
 
 ---
 
-## 🗄️ Database Schema
+## 📍 Geofencing (GPS Verification)
 
-The database backend runs on **Supabase (PostgreSQL)**. Execute the following DDL script inside your Supabase SQL editor to set up the necessary relational architecture:
+Student GPS coordinates are validated against a predefined classroom polygon using the **Ray-Casting algorithm**.
+
+### Validation Flow
+- Device location acquired from browser
+- Coordinates checked against classroom bounds
+- Outside users are rejected automatically
+
+---
+
+## 🛡️ Anti-Proxy Protection
+
+Each device generates a unique secure `device_id` using:
+- Browser cookies
+- LocalStorage persistence
+- Hardware/browser metadata
+
+### Protection Logic
+- One physical device cannot mark attendance for multiple students on the same day
+- Prevents:
+  - Proxy attendance
+  - Shared mobile check-ins
+  - Multi-user spoofing
+
+---
+
+## 👤 Dynamic Registration
+
+First-time users are automatically redirected to complete registration:
+
+### Registration Fields
+- Name
+- USN
+- Domain
+- Batch
+
+---
+
+# 🛠️ Admin Dashboard Features
+
+## 📌 Attendance State Tracking
+
+The system supports 4 attendance windows:
+
+| State | Allowed Time |
+|---|---|
+| Morning Login | Up to 13:30 |
+| Lunch Start | 13:20 – 13:50 |
+| Lunch End | 14:15 – 14:45 |
+| Final Logout | 16:00 onwards |
+
+---
+
+## ⚙️ Governance Controls
+
+Admins can dynamically enable or disable:
+
+- Strict working-hour enforcement
+- Lunch breakout compliance tracking
+- Minimum 7-hour attendance calculation
+
+---
+
+## 📊 Data & Roster Processing
+
+### Bulk CSV User Import
+- Automatic upsert handling
+- Duplicate-safe ingestion
+- Metadata preservation
+
+### Export Modes
+- Full Logs
+- Basic Logs + Remarks
+- Attendance Status Grid
+
+---
+
+# 🏗️ System Architecture & Workflow
+
+```text
+[ Dynamic QR Display ]
+          |
+          v
+[ Student Device Scan ]
+          |
+          v
+[ GPS + Device Validation ]
+          |
+          v
+[ Secure POST Handshake ]
+          |
+          v
+[ Validation Pipeline ]
+   ├── OTP Verification
+   ├── Device Validation
+   ├── Geofence Check
+   └── Time Window Allocation
+          |
+          v
+[ Attendance Database ]
+```
+
+---
+
+# 🔄 Core Workflow
+
+## 1️⃣ Display Portal (`/`)
+A public display route streams:
+- Rotating QR payloads
+- 30-second secure TOTP windows
+
+---
+
+## 2️⃣ Scan Handshake (`/checkin`)
+The client device:
+- Verifies GPS coordinates
+- Captures secure device identifiers
+- Sends encrypted attendance payloads
+
+---
+
+## 3️⃣ Evaluation Loop (`/submit`)
+The backend executes:
+
+### Validation Pipeline
+- Token integrity validation (`t ± 30s`)
+- Device spoof prevention
+- Polygon geofence calculation
+- Attendance slot mapping
+
+---
+
+# 🗄️ Database Schema
+
+The backend uses **Supabase PostgreSQL**.
+
+Execute the following SQL inside the Supabase SQL Editor.
 
 ```sql
--- 1. System Lists Tables (For Check-in Dropdowns)
+-- 1. System Lists Tables
 CREATE TABLE IF NOT EXISTS domains (
     name TEXT PRIMARY KEY
 );
@@ -53,7 +178,7 @@ CREATE TABLE IF NOT EXISTS batches (
     name TEXT PRIMARY KEY
 );
 
--- Insert Initial Starter Data for Dropdowns
+-- Insert Initial Starter Data
 INSERT INTO domains (name) VALUES 
     ('Java Fullstack'), 
     ('Data Science'), 
@@ -103,3 +228,189 @@ INSERT INTO admin_settings (setting_key, setting_value) VALUES
 ON CONFLICT (setting_key) DO NOTHING;
 
 NOTIFY pgrst, 'reload schema';
+```
+
+---
+
+# ⚙️ Environment Configuration
+
+Create a `.env` file in the root directory:
+
+```env
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_KEY=your_supabase_service_role_or_anon_key
+
+SHARED_SECRET=JBSWY3DPEHPK3PXP
+ADMIN_PASSWORD=admin123
+SECRET_KEY=your_flask_session_secret_key
+
+REQUIRED_HOURS=7
+```
+
+---
+
+# 📍 Classroom Geofence Configuration
+
+Modify the classroom boundary polygon directly in:
+
+```text
+app.py
+```
+
+Update the coordinates under:
+
+```python
+CLASSROOM_POLYGON = [
+    (...),
+    (...),
+    (...)
+]
+```
+
+---
+
+# 📦 Installation & Setup
+
+## 1️⃣ Clone Repository
+
+```bash
+git clone <repository-url>
+
+cd qr_attendance
+```
+
+---
+
+## 2️⃣ Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## 3️⃣ Run Application
+
+```bash
+python app.py
+```
+
+---
+
+# ▶️ Local Development Server
+
+Application starts locally at:
+
+```text
+http://localhost:5000
+```
+
+---
+
+# 📊 Bulk User CSV Import
+
+Upload CSV files using the following structure:
+
+```csv
+USN,Name,Domain,Batch
+4SF21CS001,Rahul,Data Science,2024-Morning
+4SF21CS002,Aisha,MERN Stack,2024-Evening
+```
+
+---
+
+# 🧠 Import Engine Features
+
+The CSV processing pipeline automatically:
+- Removes duplicates
+- Performs safe upserts
+- Preserves historical attendance data
+- Validates malformed rows
+- Maps structural metadata
+
+---
+
+# 🔐 Security Features
+
+## OTP Security
+- Rotating TOTP QR validation
+- Shared secret authentication
+- Replay attack prevention
+
+---
+
+## Device Integrity
+- Persistent device fingerprinting
+- Daily hardware binding restrictions
+
+---
+
+## Geolocation Protection
+- Polygon-based coordinate validation
+- Browser GPS enforcement
+
+---
+
+# ⚡ Technology Stack
+
+## Backend
+- Flask
+- Supabase
+- PostgreSQL
+
+## Frontend
+- Bootstrap 5
+- HTML5
+- JavaScript
+
+## Security & Validation
+- TOTP Authentication
+- Device Fingerprinting
+- Ray-Casting Geofencing
+- Secure Session Cookies
+
+---
+
+# 📈 Future Enhancements
+
+- [ ] Face recognition integration
+- [ ] NFC attendance support
+- [ ] Mobile app deployment
+- [ ] Analytics dashboard
+- [ ] Multi-campus geofence support
+- [ ] Real-time admin alerts
+- [ ] Docker deployment
+- [ ] Attendance heatmaps
+
+---
+
+# 🧪 Example Use Cases
+
+- College attendance systems
+- Corporate training programs
+- Internship tracking
+- Classroom session validation
+- Workshop participation management
+
+---
+
+# 📜 License
+
+This project is intended for:
+- Educational use
+- Research demonstrations
+- Secure attendance automation
+
+Review and customization are recommended before production deployment.
+
+---
+
+# 👨‍💻 Developer Notes
+
+The system prioritizes:
+- Attendance authenticity
+- GPS-aware validation
+- Secure QR workflows
+- Device-level anti-spoofing
+
+The architecture is optimized for lightweight deployment and scalable institutional integration.
