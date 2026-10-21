@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Console | Smart QR Attendance</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .stat-card {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 22px 20px;
+            border: 1px solid #e2e8f0;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.25s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-md);
+            border-color: #cbd5e1;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            flex-shrink: 0;
+        }
+
+        .nav-pills .nav-link {
+            color: #475569;
+            font-weight: 600;
+            border-radius: 12px;
+            padding: 10px 18px;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+            font-size: 0.92rem;
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+        }
+
+        .nav-pills .nav-link:hover {
+            color: #0f172a;
+            background-color: #f1f5f9;
+            border-color: #cbd5e1;
+        }
+
+        .nav-pills .nav-link.active {
+            background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+            color: #ffffff;
+            border-color: transparent;
+            box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+        }
+
+        .form-switch .form-check-input {
+            width: 2.5em;
+            height: 1.25em;
+            cursor: pointer;
+        }
+
+        .filter-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 18px;
+            box-shadow: var(--shadow-xs);
+        }
+
+        .lookup-item {
+            transition: all 0.2s ease;
+        }
+
+        .lookup-item:hover {
+            background-color: #f8fafc;
+        }
+
+        .action-btn-del {
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            color: #ef4444;
+            transition: all 0.15s ease;
+            border: none;
+            background: transparent;
+        }
+
+        .action-btn-del:hover {
+            background-color: #fee2e2;
+            color: #dc2626;
+        }
+
+        /* Perfectly Aligned Navbar Controls */
+        .geofence-toggle-pill {
+            display: inline-flex;
+            align-items: center;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 9999px;
+            padding: 4px 16px 4px 8px;
+            height: 38px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s ease;
+            margin-bottom: 0;
+        }
+
+        .geofence-toggle-pill:hover {
+            border-color: #cbd5e1;
+            background-color: #f8fafc;
+        }
+
+        .geofence-toggle-pill input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 36px;
+            height: 20px;
+            background-color: #cbd5e1;
+            border-radius: 9999px;
+            position: relative;
+            cursor: pointer;
+            outline: none;
+            transition: background-color 0.2s ease;
+            margin: 0;
+            flex-shrink: 0;
+            border: none;
+        }
+
+        .geofence-toggle-pill input[type="checkbox"]::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+        }
+
+        .geofence-toggle-pill input[type="checkbox"]:checked {
+            background-color: #4f46e5;
+        }
+
+        .geofence-toggle-pill input[type="checkbox"]:checked::after {
+            transform: translateX(16px);
+        }
+
+        .nav-action-btn {
+            height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 18px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border-radius: 9999px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            gap: 6px;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body class="bg-light">
+
+<!-- Top Navigation -->
+<nav class="navbar navbar-expand-lg glass-nav sticky-top px-4 py-2">
+    <div class="container-fluid d-flex align-items-center justify-content-between">
+        <!-- Left Brand -->
+        <div class="d-flex align-items-center">
+            <a href="{{ url_for('public.index') }}" class="text-decoration-none d-flex align-items-center gap-2">
+                <div class="bg-primary text-white rounded-3 d-flex align-items-center justify-content-center shadow-sm" style="width: 38px; height: 38px;">
+                    <i class="fas fa-qrcode fs-5"></i>
+                </div>
+                <span class="fs-5 fw-bold text-dark mb-0" style="font-family: 'Outfit', sans-serif;">Smart QR <span class="text-primary">Admin</span></span>
+            </a>
+        </div>
+
+        <!-- Right Controls (Aligned Pill & Buttons) -->
+        <div class="d-flex align-items-center gap-2 mt-2 mt-lg-0">
+            <!-- Global Geofence Toggle Pill -->
+            <label class="geofence-toggle-pill" for="globalGeofenceToggle" title="Toggle GPS Geofencing Campus-wide">
+                <input type="checkbox" id="globalGeofenceToggle" 
+                       {% if require_geofence %}checked{% endif %} onchange="toggleGlobalGeofence(this.checked)">
+                <span class="d-inline-flex align-items-center gap-2 ms-2 small fw-bold text-secondary">
+                    <i class="fas fa-location-crosshairs text-primary"></i>
+                    <span>Enforce Geofence</span>
+                </span>
+            </label>
+
+            <!-- Live QR Display Button -->
+            <a href="{{ url_for('public.index') }}" class="btn btn-outline-secondary nav-action-btn" target="_blank" title="Open Live Classroom Screen">
+                <i class="fas fa-display"></i>
+                <span>Live QR Display</span>
+            </a>
+
+            <!-- Logout Button -->
+            <a href="{{ url_for('admin.admin_logout') }}" class="btn btn-outline-danger nav-action-btn" title="Sign Out">
+                <i class="fas fa-arrow-right-from-bracket"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid px-4 py-4">
+
+    <!-- Flash Notifications -->
+    {% if request.args.get('success') %}
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm rounded-3 py-3 px-4 d-flex align-items-center mb-4" role="alert">
+        <i class="fas fa-circle-check fs-5 me-2 text-success"></i>
+        <div class="fw-medium">{{ request.args.get('success') }}</div>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+    {% if request.args.get('error') %}
+    <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm rounded-3 py-3 px-4 d-flex align-items-center mb-4" role="alert">
+        <i class="fas fa-triangle-exclamation fs-5 me-2 text-danger"></i>
+        <div class="fw-medium">{{ request.args.get('error') }}</div>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <!-- Metric Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px;">Today's Scans</div>
+                        <div class="fs-3 fw-bold text-dark mt-1 font-mono">{{ today_records_count }}</div>
+                    </div>
+                    <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+                        <i class="fas fa-fingerprint"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px;">Registered Students</div>
+                        <div class="fs-3 fw-bold text-dark mt-1 font-mono">{{ total_users }}</div>
+                    </div>
+                    <div class="stat-icon bg-success bg-opacity-10 text-success">
+                        <i class="fas fa-user-graduate"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px;">Active Locations</div>
+                        <div class="fs-3 fw-bold text-dark mt-1 font-mono">{{ active_locs_count }}</div>
+                    </div>
+                    <div class="stat-icon bg-info bg-opacity-10 text-info">
+                        <i class="fas fa-location-dot"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-card">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-muted small fw-bold text-uppercase" style="letter-spacing: 0.5px;">Configured Sessions</div>
+                        <div class="fs-3 fw-bold text-dark mt-1 font-mono">{{ total_sessions_count }}</div>
+                    </div>
+                    <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabbed Management Navigation -->
+    <ul class="nav nav-pills mb-4" id="adminTabs" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" id="tab-records-btn" data-bs-toggle="pill" data-bs-target="#tab-records">
+                <i class="fas fa-list-check me-2"></i>Attendance Stream
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="tab-sessions-btn" data-bs-toggle="pill" data-bs-target="#tab-sessions">
+                <i class="fas fa-layer-group me-2"></i>Sessions Manager
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="tab-locations-btn" data-bs-toggle="pill" data-bs-target="#tab-locations">
+                <i class="fas fa-map-location-dot me-2"></i>Geofence Locations
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="tab-lookups-btn" data-bs-toggle="pill" data-bs-target="#tab-lookups">
+                <i class="fas fa-building-columns me-2"></i>Depts, Divs & Sems
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="tab-fields-btn" data-bs-toggle="pill" data-bs-target="#tab-fields">
+                <i class="fas fa-sliders me-2"></i>Dynamic Fields
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="tab-export-btn" data-bs-toggle="pill" data-bs-target="#tab-export">
+                <i class="fas fa-file-export me-2"></i>Export Studio
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="tab-import-btn" data-bs-toggle="pill" data-bs-target="#tab-import">
+                <i class="fas fa-file-import me-2"></i>Bulk Import
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Panes -->
+    <div class="tab-content" id="adminTabsContent">
+
+        <!-- TAB 1: ATTENDANCE STREAM & FILTERING -->
+        <div class="tab-pane fade show active" id="tab-records">
+            <div class="filter-card p-3 mb-3">
+                <form method="GET" action="{{ url_for('admin.admin_dashboard') }}" class="row g-2 align-items-end" id="filterForm">
+                    <div class="col-md-2 col-6">
+                        <label class="form-label small fw-bold text-secondary mb-1">DATE</label>
+                        <input type="date" name="date" class="form-control form-control-sm" value="{{ current_date }}" onchange="document.getElementById('filterForm').submit()">
+                    </div>
+                    <div class="col-md-2 col-6">
+                        <label class="form-label small fw-bold text-secondary mb-1">SESSION</label>
+                        <select name="session_id" class="form-select form-select-sm" onchange="document.getElementById('filterForm').submit()">
+                            <option value="All" {% if current_session == 'All' %}selected{% endif %}>All Sessions</option>
+                            {% for s in sessions %}
+                            <option value="{{ s.id }}" {% if current_session|string == s.id|string %}selected{% endif %}>{{ s.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 col-4">
+                        <label class="form-label small fw-bold text-secondary mb-1">DEPARTMENT</label>
+                        <select name="department" class="form-select form-select-sm" onchange="document.getElementById('filterForm').submit()">
+                            <option value="All" {% if current_dept == 'All' %}selected{% endif %}>All Depts</option>
+                            {% for d in departments %}
+                            <option value="{{ d.code }}" {% if current_dept == d.code %}selected{% endif %}>{{ d.code }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 col-4">
+                        <label class="form-label small fw-bold text-secondary mb-1">DIVISION</label>
+                        <select name="division" class="form-select form-select-sm" onchange="document.getElementById('filterForm').submit()">
+                            <option value="All" {% if current_div == 'All' %}selected{% endif %}>All Divs</option>
+                            {% for div in divisions %}
+                            <option value="{{ div.name }}" {% if current_div == div.name %}selected{% endif %}>Div {{ div.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 col-4">
+                        <label class="form-label small fw-bold text-secondary mb-1">SEMESTER</label>
+                        <select name="semester" class="form-select form-select-sm" onchange="document.getElementById('filterForm').submit()">
+                            <option value="All" {% if current_sem == 'All' %}selected{% endif %}>All Sems</option>
+                            {% for sem in semesters %}
+                            <option value="{{ sem.name }}" {% if current_sem == sem.name %}selected{% endif %}>{{ sem.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 col-12">
+                        <div class="input-group input-group-sm">
+                            <input type="text" name="search" class="form-control" placeholder="Search USN/Name" value="{{ search }}">
+                            <button class="btn btn-primary" type="submit"><i class="fas fa-search"></i></button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Table Header Stats Bar -->
+            <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 px-1">
+                <div class="small text-secondary">
+                    Showing <span class="fw-bold text-dark">{{ records|length }}</span> attendance record{{ 's' if records|length != 1 else '' }} for <span class="fw-semibold text-primary">{{ current_date }}</span>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-success rounded-pill px-3 py-1" onclick="downloadExport('excel')">
+                        <i class="fas fa-file-excel me-1"></i>Quick Export (.xlsx)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Attendance Records Table -->
+            <div class="card-modern overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Student Details</th>
+                                <th>Dept / Div / Sem</th>
+                                <th>Session & Mode</th>
+                                <th>Check-in</th>
+                                <th>Check-out</th>
+                                <th>Duration</th>
+                                <th>Verified Zone</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in records %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="student-avatar" style="width: 38px; height: 38px; font-size: 0.82rem; border-radius: 10px;">
+                                            {{ ((r.user.name if r.user else 'ST').split(' ')|map('first')|join(''))[:2].upper() }}
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold font-mono text-dark" style="font-size: 0.88rem;">{{ r.usn }}</div>
+                                            <div class="small text-secondary fw-semibold">{{ r.user.name if r.user else "Unknown Student" }}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <span class="badge badge-soft-primary">{{ r.user.department or '--' }}</span>
+                                        <span class="badge badge-soft-secondary">Div {{ r.user.division or '--' }}</span>
+                                        <span class="badge bg-light text-dark border">{{ r.user.semester or '--' }}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="fw-bold small text-dark">{{ r.session.title if r.session else "General" }}</div>
+                                    {% if r.session and r.session.mode == 'single_checkin' %}
+                                        <span class="badge badge-soft-info" style="font-size: 0.72rem;">
+                                            <i class="fas fa-user-check me-1"></i>One-Time Count
+                                        </span>
+                                    {% else %}
+                                        <span class="badge badge-soft-primary" style="font-size: 0.72rem;">
+                                            <i class="fas fa-clock-rotate-left me-1"></i>Check-in / Out
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark border font-mono">
+                                        {{ r.checkin_time.strftime("%I:%M:%S %p") if r.checkin_time else '--' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if r.session and r.session.mode == 'single_checkin' %}
+                                        <span class="text-muted small">N/A</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-dark border font-mono">
+                                            {{ r.checkout_time.strftime("%I:%M:%S %p") if r.checkout_time else '--' }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="small font-mono fw-bold text-secondary">
+                                        {{ r.duration_formatted() if (r.session and r.session.mode != 'single_checkin') else '--' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <small class="text-secondary"><i class="fas fa-location-dot text-primary me-1"></i>{{ r.location_name or 'Authorized Area' }}</small>
+                                </td>
+                                <td>
+                                    {% if r.status == 'Present' %}
+                                        <span class="badge badge-soft-success"><i class="fas fa-check-circle me-1"></i>Present</span>
+                                    {% elif r.status == 'Checked In' %}
+                                        <span class="badge badge-soft-warning"><i class="fas fa-hourglass-half me-1"></i>Checked In</span>
+                                    {% else %}
+                                        <span class="badge badge-soft-primary">{{ r.status }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="8" class="text-center py-5 text-muted">
+                                    <div class="empty-state">
+                                        <div class="empty-state-icon">
+                                            <i class="fas fa-clipboard-list"></i>
+                                        </div>
+                                        <h6 class="fw-bold text-dark mb-1">No attendance records found</h6>
+                                        <p class="text-muted small mb-0">No scans matching the current date and filter criteria.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: SESSIONS MANAGER -->
+        <div class="tab-pane fade" id="tab-sessions">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="fw-bold mb-1">Attendance Sessions</h5>
+                    <p class="text-muted small mb-0">Configure classroom sessions, labs, and single-scan attendance counters.</p>
+                </div>
+                <button class="btn btn-primary-modern btn-sm" data-bs-toggle="modal" data-bs-target="#createSessionModal">
+                    <i class="fas fa-plus me-1"></i>Create New Session
+                </button>
+            </div>
+
+            <div class="card-modern overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Session Title</th>
+                                <th>Code</th>
+                                <th>Mode</th>
+                                <th>Date</th>
+                                <th>Display QR Status</th>
+                                <th>Active Switch</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in sessions %}
+                            <tr>
+                                <td class="fw-bold text-dark">{{ s.title }}</td>
+                                <td><span class="badge bg-light text-secondary border font-mono">{{ s.session_code }}</span></td>
+                                <td>
+                                    {% if s.mode == 'single_checkin' %}
+                                        <span class="badge badge-soft-info">
+                                            <i class="fas fa-user-check me-1"></i>One-Time Attendance (Count Attendees)
+                                        </span>
+                                    {% else %}
+                                        <span class="badge badge-soft-primary">
+                                            <i class="fas fa-clock-rotate-left me-1"></i>Check-in & One-Time Checkout
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ s.date.strftime("%Y-%m-%d") if s.date else '--' }}</td>
+                                <td>
+                                    {% if active_session_id == s.id %}
+                                        <span class="badge bg-success text-white px-3 py-1 rounded-pill"><i class="fas fa-circle-check me-1"></i>Live on Display</span>
+                                    {% else %}
+                                        <form action="{{ url_for('admin.admin_set_active_session') }}" method="POST" class="d-inline">
+                                            <input type="hidden" name="session_id" value="{{ s.id }}">
+                                            <button type="submit" class="btn btn-outline-primary btn-sm py-1 px-3 rounded-pill" style="font-size: 0.8rem;">
+                                                Set Live on Screen
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" {% if s.is_active %}checked{% endif %} 
+                                               onchange="toggleSession({{ s.id }})">
+                                    </div>
+                                </td>
+                                <td>
+                                    <button class="action-btn-del" onclick="deleteSession({{ s.id }})" title="Delete session">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: MULTI-LOCATION GEOFENCE MANAGER -->
+        <div class="tab-pane fade" id="tab-locations">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h5 class="fw-bold mb-1">Geofence Locations</h5>
+                    <p class="text-muted small mb-0">Students must be within the radius of ANY enabled location to mark attendance.</p>
+                </div>
+                <button class="btn btn-primary-modern btn-sm" data-bs-toggle="modal" data-bs-target="#addLocationModal">
+                    <i class="fas fa-plus me-1"></i>Add Geofence Location
+                </button>
+            </div>
+
+            <div class="card-modern overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Location Name</th>
+                                <th>Coordinates (Lat, Lon)</th>
+                                <th>Perimeter Radius</th>
+                                <th>Enable / Disable</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for loc in locations %}
+                            <tr>
+                                <td class="fw-bold text-dark">
+                                    <i class="fas fa-map-pin text-danger me-2"></i>{{ loc.name }}
+                                </td>
+                                <td class="font-mono small text-secondary">{{ loc.latitude }}, {{ loc.longitude }}</td>
+                                <td>
+                                    <span class="badge bg-light text-dark border font-mono">{{ loc.radius_meters }} meters</span>
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" {% if loc.is_active %}checked{% endif %}
+                                               onchange="toggleLocation({{ loc.id }})">
+                                    </div>
+                                </td>
+                                <td>
+                                    <button class="action-btn-del" onclick="deleteLocation({{ loc.id }})" title="Delete location">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: DEPARTMENTS, DIVISIONS & SEMESTERS -->
+        <div class="tab-pane fade" id="tab-lookups">
+            <div class="row g-4">
+                <!-- Departments Column -->
+                <div class="col-lg-5">
+                    <div class="card-modern p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-building text-primary me-2"></i>Departments</h6>
+                            <span class="badge badge-soft-primary">{{ departments|length }}</span>
+                        </div>
+                        <div class="input-group input-group-sm mb-3">
+                            <input type="text" id="newDeptCode" class="form-control" placeholder="Code (e.g. CSE)" style="max-width: 110px;">
+                            <input type="text" id="newDeptName" class="form-control" placeholder="Department Name">
+                            <button class="btn btn-primary" onclick="addDepartment()">Add</button>
+                        </div>
+                        <div class="list-group list-group-flush border rounded-3 overflow-auto" style="max-height: 340px;">
+                            {% for d in departments %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3 lookup-item">
+                                <div>
+                                    <span class="fw-bold font-mono text-primary">{{ d.code }}</span>
+                                    <span class="small text-secondary ms-2 fw-medium">{{ d.name }}</span>
+                                </div>
+                                <button class="action-btn-del" onclick="deleteLookup('department', {{ d.id }})" title="Delete department">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Divisions Column -->
+                <div class="col-lg-3">
+                    <div class="card-modern p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-network-wired text-info me-2"></i>Divisions</h6>
+                            <span class="badge badge-soft-info">{{ divisions|length }}</span>
+                        </div>
+                        <div class="input-group input-group-sm mb-3">
+                            <input type="text" id="newDivName" class="form-control" placeholder="Division (e.g. A, B)">
+                            <button class="btn btn-info text-white" onclick="addDivision()">Add</button>
+                        </div>
+                        <div class="list-group list-group-flush border rounded-3 overflow-auto" style="max-height: 340px;">
+                            {% for div in divisions %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3 lookup-item">
+                                <span class="fw-bold text-dark">Division {{ div.name }}</span>
+                                <button class="action-btn-del" onclick="deleteLookup('division', {{ div.id }})" title="Delete division">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Semesters Column -->
+                <div class="col-lg-4">
+                    <div class="card-modern p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-graduation-cap text-warning me-2"></i>Semesters</h6>
+                            <span class="badge badge-soft-warning">{{ semesters|length }}</span>
+                        </div>
+                        <div class="input-group input-group-sm mb-3">
+                            <input type="text" id="newSemName" class="form-control" placeholder="e.g. Sem 1, Sem 3">
+                            <button class="btn btn-warning text-dark fw-bold" onclick="addSemester()">Add</button>
+                        </div>
+                        <div class="list-group list-group-flush border rounded-3 overflow-auto" style="max-height: 340px;">
+                            {% for sem in semesters %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-3 lookup-item">
+                                <span class="fw-bold text-dark">{{ sem.name }}</span>
+                                <button class="action-btn-del" onclick="deleteLookup('semester', {{ sem.id }})" title="Delete semester">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: DYNAMIC REGISTRATION FIELDS -->
+        <div class="tab-pane fade" id="tab-fields">
+            <div class="row g-4">
+                <div class="col-lg-5">
+                    <div class="card-modern p-4">
+                        <h6 class="fw-bold mb-3 text-dark"><i class="fas fa-circle-plus text-primary me-2"></i>Create Custom Field</h6>
+                        <p class="text-muted small">Add dynamic registration fields that will appear on the mobile check-in form.</p>
+
+                        <form action="{{ url_for('admin.admin_add_dynamic_field') }}" method="POST">
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">FIELD LABEL</label>
+                                <input type="text" name="label" class="form-control" placeholder="e.g. Mobile Number, GitHub Profile" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">FIELD IDENTIFIER (KEY)</label>
+                                <input type="text" name="field_key" class="form-control font-mono" placeholder="e.g. phone, github_id" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">INPUT TYPE</label>
+                                <select name="field_type" class="form-select" id="fieldTypeSelect" onchange="toggleSelectOptions(this.value)">
+                                    <option value="text">Text Input</option>
+                                    <option value="number">Numeric Input</option>
+                                    <option value="select">Dropdown Select</option>
+                                </select>
+                            </div>
+                            <div class="mb-3 d-none" id="selectOptionsDiv">
+                                <label class="form-label small fw-bold">DROPDOWN CHOICES (COMMA-SEPARATED)</label>
+                                <input type="text" name="options" class="form-control" placeholder="Option 1, Option 2, Option 3">
+                            </div>
+                            <div class="form-check mb-4">
+                                <input class="form-check-input" type="checkbox" name="is_required" id="reqCheck">
+                                <label class="form-check-label small fw-semibold text-secondary" for="reqCheck">Mandatory (Required Field)</label>
+                            </div>
+                            <button type="submit" class="btn btn-primary-modern w-100">
+                                <i class="fas fa-plus me-1"></i>Save Dynamic Field
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-lg-7">
+                    <div class="card-modern p-4">
+                        <h6 class="fw-bold mb-3 text-dark">Configured Dynamic Registration Fields</h6>
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Label</th>
+                                        <th>Key</th>
+                                        <th>Type</th>
+                                        <th>Required</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for df in dynamic_fields %}
+                                    <tr>
+                                        <td class="fw-bold text-dark">{{ df.label }}</td>
+                                        <td><span class="badge bg-light text-secondary border font-mono">{{ df.field_key }}</span></td>
+                                        <td><span class="badge badge-soft-primary">{{ df.field_type }}</span></td>
+                                        <td>
+                                            {% if df.is_required %}
+                                                <span class="badge badge-soft-danger">Yes</span>
+                                            {% else %}
+                                                <span class="badge badge-soft-secondary">No</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <button class="action-btn-del" onclick="deleteDynamicField({{ df.id }})" title="Delete field">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted py-4">No custom fields created yet.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 6: EXPORT STUDIO -->
+        <div class="tab-pane fade" id="tab-export">
+            <div class="card-modern p-4" style="max-width: 800px; margin: 0 auto;">
+                <div class="text-center mb-4">
+                    <div class="fs-1 text-primary mb-2"><i class="fas fa-file-excel"></i></div>
+                    <h4 class="fw-bold text-dark" style="font-family: 'Outfit', sans-serif;">Attendance Export Studio</h4>
+                    <p class="text-muted small">Filter records by Department, Division, Semester, Session, or Date Range and export to styled Excel or CSV.</p>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">DATE FROM</label>
+                        <input type="date" id="exportDateFrom" class="form-control" value="{{ current_date }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">DATE TO</label>
+                        <input type="date" id="exportDateTo" class="form-control" value="{{ current_date }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">DEPARTMENT</label>
+                        <select id="exportDept" class="form-select">
+                            <option value="All">All Departments</option>
+                            {% for d in departments %}
+                            <option value="{{ d.code }}">{{ d.code }} - {{ d.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">DIVISION</label>
+                        <select id="exportDiv" class="form-select">
+                            <option value="All">All Divisions</option>
+                            {% for div in divisions %}
+                            <option value="{{ div.name }}">Div {{ div.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">SEMESTER</label>
+                        <select id="exportSem" class="form-select">
+                            <option value="All">All Semesters</option>
+                            {% for sem in semesters %}
+                            <option value="{{ sem.name }}">{{ sem.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small fw-bold">SESSION</label>
+                        <select id="exportSession" class="form-select">
+                            <option value="All">All Sessions</option>
+                            {% for s in sessions %}
+                            <option value="{{ s.id }}">{{ s.title }} ({{ s.date }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-3 justify-content-center">
+                    <button class="btn btn-success px-4 py-2 rounded-3 fw-bold" onclick="downloadExport('excel')">
+                        <i class="fas fa-file-excel me-2"></i>Download Styled Excel (.xlsx)
+                    </button>
+                    <button class="btn btn-outline-primary px-4 py-2 rounded-3 fw-bold" onclick="downloadExport('csv')">
+                        <i class="fas fa-file-csv me-2"></i>Download Clean CSV (.csv)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 7: BULK ROSTER IMPORT -->
+        <div class="tab-pane fade" id="tab-import">
+            <div class="card-modern p-4" style="max-width: 650px; margin: 0 auto;">
+                <div class="text-center mb-4">
+                    <div class="fs-1 text-primary mb-2"><i class="fas fa-cloud-arrow-up"></i></div>
+                    <h4 class="fw-bold text-dark" style="font-family: 'Outfit', sans-serif;">Bulk Roster Ingestion</h4>
+                    <p class="text-muted small">Upload CSV to batch-register students and automatically populate departments, divisions, and semesters.</p>
+                </div>
+
+                <div class="p-3 bg-light rounded-3 mb-4 border font-mono small">
+                    <strong class="text-dark">Required CSV Columns:</strong><br>
+                    <span class="text-primary">USN, Name, Department, Division, Semester</span><br>
+                    <small class="text-muted">Example: 4SF21CS001, John Doe, CSE, A, Sem 5</small>
+                </div>
+
+                <form action="{{ url_for('admin.admin_upload_csv') }}" method="POST" enctype="multipart/form-data">
+                    <div class="mb-4">
+                        <input type="file" name="file" class="form-control" accept=".csv" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary-modern w-100 py-2">
+                        <i class="fas fa-upload me-2"></i>Ingest Student Roster
+                    </button>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- MODAL: CREATE SESSION -->
+<div class="modal fade" id="createSessionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark">Create Attendance Session</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('admin.admin_create_session') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">SESSION TITLE</label>
+                        <input type="text" name="title" class="form-control" placeholder="e.g. Database Lab Batch A, AI Lecture" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">SESSION CODE (OPTIONAL)</label>
+                        <input type="text" name="session_code" class="form-control font-mono text-uppercase" placeholder="AUTO-GENERATED IF BLANK">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">ATTENDANCE MODE</label>
+                        <select name="mode" class="form-select">
+                            <option value="single_checkin">One-Time Attendance (Count Attendees Present)</option>
+                            <option value="checkin_checkout">Check-in & One-Time Check-out</option>
+                        </select>
+                        <small class="text-muted">Single check-in counts attendees immediately in 1 scan. Check-in/out records elapsed duration.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">SESSION DATE</label>
+                        <input type="date" name="date" class="form-control" value="{{ current_date }}">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-modern">Create & Activate</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: ADD GEOFENCE LOCATION -->
+<div class="modal fade" id="addLocationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark">Add Geofenced Location</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('admin.admin_add_location') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">LOCATION NAME</label>
+                        <input type="text" name="name" class="form-control" placeholder="e.g. Computer Science Lab 1, Audi" required>
+                    </div>
+
+                    <div class="mb-3 text-end">
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="detectAdminLocation()">
+                            <i class="fas fa-location-crosshairs me-1"></i>Use My Current GPS Position
+                        </button>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">LATITUDE</label>
+                            <input type="number" step="any" name="latitude" id="locLat" class="form-control font-mono" placeholder="15.7781" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">LONGITUDE</label>
+                            <input type="number" step="any" name="longitude" id="locLon" class="form-control font-mono" placeholder="74.4605" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">PERIMETER RADIUS (METERS)</label>
+                        <input type="number" step="1" name="radius_meters" class="form-control font-mono" value="100" min="10" max="5000" required>
+                        <small class="text-muted">Students outside this radius in meters will be rejected.</small>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary-modern">Save Location</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tab = urlParams.get('tab');
+    if (tab) {
+        const targetBtn = document.getElementById('tab-' + tab + '-btn');
+        if (targetBtn) {
+            new bootstrap.Tab(targetBtn).show();
+        }
+    }
+});
+
+function toggleGlobalGeofence(isChecked) {
+    fetch('/admin/toggle_geofence', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({require_geofence: isChecked})
+    });
+}
+
+function toggleSession(sessionId) {
+    fetch('/admin/sessions/toggle', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({session_id: sessionId})
+    });
+}
+
+function deleteSession(sessionId) {
+    if (!confirm("Are you sure you want to delete this session and its attendance records?")) return;
+    fetch('/admin/sessions/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({session_id: sessionId})
+    }).then(() => window.location.reload());
+}
+
+function toggleLocation(locId) {
+    fetch('/admin/locations/toggle', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({location_id: locId})
+    });
+}
+
+function deleteLocation(locId) {
+    if (!confirm("Are you sure you want to delete this location?")) return;
+    fetch('/admin/locations/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({location_id: locId})
+    }).then(() => window.location.reload());
+}
+
+function detectAdminLocation() {
+    if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(pos => {
+            document.getElementById("locLat").value = pos.coords.latitude;
+            document.getElementById("locLon").value = pos.coords.longitude;
+        }, err => {
+            alert("Could not access GPS. Please allow browser location permissions.");
+        }, { enableHighAccuracy: true });
+    }
+}
+
+function addDepartment() {
+    const code = document.getElementById("newDeptCode").value.trim();
+    const name = document.getElementById("newDeptName").value.trim();
+    if (!name) return;
+    fetch('/admin/lookup/manage', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type: 'department', action: 'add', code: code, name: name})
+    }).then(() => window.location.reload());
+}
+
+function addDivision() {
+    const name = document.getElementById("newDivName").value.trim();
+    if (!name) return;
+    fetch('/admin/lookup/manage', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type: 'division', action: 'add', name: name})
+    }).then(() => window.location.reload());
+}
+
+function addSemester() {
+    const name = document.getElementById("newSemName").value.trim();
+    if (!name) return;
+    fetch('/admin/lookup/manage', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type: 'semester', action: 'add', name: name})
+    }).then(() => window.location.reload());
+}
+
+function deleteLookup(type, id) {
+    if (!confirm("Delete this entry?")) return;
+    fetch('/admin/lookup/manage', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type: type, action: 'delete', id: id})
+    }).then(() => window.location.reload());
+}
+
+function toggleSelectOptions(val) {
+    const div = document.getElementById("selectOptionsDiv");
+    if (val === "select") {
+        div.classList.remove("d-none");
+    } else {
+        div.classList.add("d-none");
+    }
+}
+
+function deleteDynamicField(id) {
+    if (!confirm("Are you sure you want to delete this custom field?")) return;
+    fetch('/admin/dynamic_fields/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({field_id: id})
+    }).then(() => window.location.reload());
+}
+
+function downloadExport(format) {
+    const dateFrom = document.getElementById("exportDateFrom").value;
+    const dateTo = document.getElementById("exportDateTo").value;
+    const dept = document.getElementById("exportDept").value;
+    const div = document.getElementById("exportDiv").value;
+    const sem = document.getElementById("exportSem").value;
+    const sess = document.getElementById("exportSession").value;
+
+    const params = new URLSearchParams({
+        date_from: dateFrom,
+        date_to: dateTo,
+        department: dept,
+        division: div,
+        semester: sem,
+        session_id: sess
+    });
+
+    window.location.href = `/admin/export/${format}?` + params.toString();
+}
+</script>
+</body>
+</html>

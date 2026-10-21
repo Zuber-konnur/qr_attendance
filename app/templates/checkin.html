@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Student Attendance Check-in | Smart QR</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            position: relative;
+        }
+
+        .checkin-card {
+            background: #ffffff;
+            width: 100%;
+            max-width: 440px;
+            border-radius: 28px;
+            padding: 30px 24px;
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.08), 0 0 1px 1px rgba(0,0,0,0.04);
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            position: relative;
+            z-index: 1;
+            transition: all 0.3s ease;
+        }
+
+        .brand-badge {
+            width: 56px;
+            height: 56px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #4f46e5, #06b6d4);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 14px;
+            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.28);
+            font-size: 22px;
+        }
+
+        .btn-submit {
+            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 16px;
+            font-weight: 700;
+            font-size: 1rem;
+            width: 100%;
+            box-shadow: 0 6px 18px rgba(79, 70, 229, 0.35);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .btn-submit:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(79, 70, 229, 0.45);
+            color: white;
+        }
+
+        .btn-submit:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .location-status-card {
+            border-radius: 16px;
+            padding: 12px 16px;
+            font-size: 0.86rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .verified-student-card {
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 18px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .success-icon-ring {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: #ecfdf5;
+            color: #10b981;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-size: 32px;
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.25);
+        }
+    </style>
+</head>
+<body>
+
+<div class="ambient-glow ambient-glow-primary"></div>
+<div class="ambient-glow ambient-glow-secondary"></div>
+
+<div class="checkin-card">
+
+    <!-- Brand Header -->
+    <div class="text-center mb-3">
+        <div class="brand-badge">
+            <i class="fas fa-location-crosshairs"></i>
+        </div>
+        <h4 class="fw-bold mb-1 text-dark" style="font-family: 'Outfit', sans-serif;">Smart Check-in</h4>
+        <div class="text-secondary small fw-medium">
+            {{ current_session.title if current_session else "General Attendance Session" }}
+        </div>
+        <div class="mt-2">
+            {% if current_session and current_session.mode == 'single_checkin' %}
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-3 py-1">
+                    <i class="fas fa-user-check me-1"></i>One-Time Attendance Mode
+                </span>
+            {% else %}
+                <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 rounded-pill px-3 py-1">
+                    <i class="fas fa-clock-rotate-left me-1"></i>Check-in / One-Time Checkout
+                </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Live GPS Perimeter Status Card -->
+    <div class="mb-3">
+        <div class="location-status-card bg-light border text-secondary" id="locationStatusCard">
+            <div class="spinner-border spinner-border-sm text-primary" role="status" id="gpsSpinner"></div>
+            <div class="flex-grow-1" id="gpsStatusMessage">
+                <span class="fw-semibold">Acquiring GPS coordinates...</span>
+                <div class="text-muted" style="font-size: 0.75rem;">Keep browser location permission enabled</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dynamic Notification / Security Banner -->
+    <div id="alertBanner" class="alert d-none mb-3 py-2 px-3 small border-0 shadow-sm" role="alert"></div>
+
+    <!-- MAIN FORM VIEW -->
+    <div id="mainFormView">
+        <form id="attendanceForm">
+            <input type="hidden" name="token" value="{{ token }}">
+            <input type="hidden" name="session_id" value="{{ current_session.id if current_session else '' }}">
+            <input type="hidden" name="lat" id="latInput">
+            <input type="hidden" name="lon" id="lonInput">
+
+            <!-- USN Input Box -->
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-secondary mb-1">UNIVERSITY SEAT NUMBER (USN)</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light border-end-0 text-muted"><i class="fas fa-id-card"></i></span>
+                    <input type="text" name="usn" id="usnInput" class="form-control text-uppercase font-mono fw-bold border-start-0" 
+                           placeholder="e.g. 4SF21CS001" required autocomplete="off">
+                </div>
+            </div>
+
+            <!-- Pre-filled Verified Student Card (Shows when USN recognized) -->
+            <div id="verifiedStudentCard" class="verified-student-card d-none">
+                <div class="student-avatar" id="avatarInitials">ST</div>
+                <div class="flex-grow-1 overflow-hidden">
+                    <div class="fw-bold text-dark text-truncate" id="verifiedName">Student Name</div>
+                    <div class="d-flex flex-wrap gap-1 mt-1">
+                        <span class="badge bg-primary bg-opacity-10 text-primary" id="verifiedDept">CSE</span>
+                        <span class="badge bg-secondary bg-opacity-10 text-secondary" id="verifiedDiv">Div A</span>
+                        <span class="badge bg-light text-dark border" id="verifiedSem">Sem 5</span>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-link text-muted p-0 text-decoration-none" onclick="clearUSN()" title="Change USN">
+                    <i class="fas fa-pen-to-square"></i>
+                </button>
+            </div>
+
+            <!-- Registration Accordion (Unfolds for new first-time students) -->
+            <div id="registrationContainer" class="d-none">
+                <div class="p-3 bg-light rounded-4 mb-3 border">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="fw-bold small text-dark"><i class="fas fa-user-plus me-1 text-primary"></i>Student Registration</span>
+                        <span class="badge bg-secondary rounded-pill small">First-Time Setup</span>
+                    </div>
+
+                    <!-- Full Name -->
+                    <div class="mb-2">
+                        <label class="form-label small text-muted mb-1">Full Name</label>
+                        <input type="text" name="name" id="nameInput" class="form-control form-control-sm" placeholder="Enter Full Name">
+                    </div>
+
+                    <!-- Department & Division (2 Columns) -->
+                    <div class="row g-2 mb-2">
+                        <div class="col-7">
+                            <label class="form-label small text-muted mb-1">Department</label>
+                            <select name="department" id="deptSelect" class="form-select form-select-sm">
+                                <option value="">Select Dept</option>
+                                {% for d in departments %}
+                                <option value="{{ d.code }}">{{ d.code }} - {{ d.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label small text-muted mb-1">Division</label>
+                            <select name="division" id="divSelect" class="form-select form-select-sm">
+                                <option value="">Select</option>
+                                {% for div in divisions %}
+                                <option value="{{ div.name }}">Div {{ div.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Semester -->
+                    <div class="mb-2">
+                        <label class="form-label small text-muted mb-1">Semester</label>
+                        <select name="semester" id="semSelect" class="form-select form-select-sm">
+                            <option value="">Select Semester</option>
+                            {% for s in semesters %}
+                            <option value="{{ s.name }}">{{ s.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Dynamic Custom Fields Configured by Admin -->
+                    {% for df in dynamic_fields %}
+                    <div class="mb-2">
+                        <label class="form-label small text-muted mb-1">{{ df.label }} {% if df.is_required %}<span class="text-danger">*</span>{% endif %}</label>
+                        {% if df.field_type == 'select' %}
+                            <select name="custom_{{ df.field_key }}" class="form-select form-select-sm" id="custom_{{ df.field_key }}" {% if df.is_required %}required{% endif %}>
+                                <option value="">Select {{ df.label }}</option>
+                                {% for opt in df.options %}
+                                <option value="{{ opt }}">{{ opt }}</option>
+                                {% endfor %}
+                            </select>
+                        {% elif df.field_type == 'number' %}
+                            <input type="number" name="custom_{{ df.field_key }}" class="form-control form-control-sm" id="custom_{{ df.field_key }}" 
+                                   placeholder="{{ df.label }}" {% if df.is_required %}required{% endif %}>
+                        {% else %}
+                            <input type="text" name="custom_{{ df.field_key }}" class="form-control form-control-sm" id="custom_{{ df.field_key }}" 
+                                   placeholder="{{ df.label }}" {% if df.is_required %}required{% endif %}>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Submit Attendance Button -->
+            <button type="submit" id="submitBtn" class="btn-submit" disabled>
+                <i class="fas fa-check-circle"></i>
+                <span id="submitBtnText">Verify & Record Attendance</span>
+            </button>
+        </form>
+
+        <div class="text-center mt-3">
+            <small class="text-muted" style="font-size: 0.75rem;">
+                <i class="fas fa-lock me-1"></i> Device hardware bound • Anti-proxy protected
+            </small>
+        </div>
+    </div>
+
+    <!-- DIGITAL ATTENDANCE PASS / SUCCESS RECEIPT (Revealed upon scan success) -->
+    <div id="successReceiptView" class="receipt-card d-none animate-success">
+        <div class="success-icon-ring">
+            <i class="fas fa-check"></i>
+        </div>
+        <h5 class="fw-bold mb-1 text-dark" style="font-family: 'Outfit', sans-serif;">Attendance Confirmed</h5>
+        <p class="text-muted small mb-3" id="receiptStatusSubtitle">Check-in successfully recorded</p>
+
+        <div class="bg-light p-3 rounded-4 mb-3 text-start">
+            <div class="receipt-row">
+                <span class="text-muted">Student Name</span>
+                <strong class="text-dark" id="recStudentName">--</strong>
+            </div>
+            <div class="receipt-row">
+                <span class="text-muted">USN</span>
+                <strong class="font-mono text-dark" id="recUSN">--</strong>
+            </div>
+            <div class="receipt-row">
+                <span class="text-muted">Session</span>
+                <span class="text-dark fw-medium" id="recSession">--</span>
+            </div>
+            <div class="receipt-row">
+                <span class="text-muted">Action</span>
+                <span class="badge bg-success" id="recActionBadge">Check-in</span>
+            </div>
+            <div class="receipt-row" id="recDurationRow" style="display: none;">
+                <span class="text-muted">Session Duration</span>
+                <strong class="text-primary font-mono" id="recDuration">--</strong>
+            </div>
+            <div class="receipt-row">
+                <span class="text-muted">Verified Zone</span>
+                <span class="small text-secondary" id="recLocation"><i class="fas fa-location-dot text-primary me-1"></i>Campus Area</span>
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-outline-secondary w-100 py-2 rounded-3 small" onclick="window.location.reload()">
+            <i class="fas fa-arrow-left me-1"></i>Done
+        </button>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// Remove QR query tokens from history for security
+if (window.history.replaceState) {
+    const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+    window.history.replaceState({path: cleanUrl}, '', cleanUrl);
+}
+
+// Persistent Device Fingerprinting
+function getDeviceId() {
+    let cookieMatch = document.cookie.match(/(?:^|; )device_id=([^;]*)/);
+    let deviceId = cookieMatch ? cookieMatch[1] : null;
+
+    if (!deviceId) deviceId = localStorage.getItem("device_id");
+    if (!deviceId) deviceId = crypto.randomUUID();
+
+    localStorage.setItem("device_id", deviceId);
+    let d = new Date();
+    d.setTime(d.getTime() + (400 * 24 * 60 * 60 * 1000));
+    document.cookie = "device_id=" + deviceId + ";expires=" + d.toUTCString() + ";path=/;SameSite=Lax";
+    return deviceId;
+}
+
+const activeLocations = {{ active_locations | tojson }};
+const requireGeofence = {{ 'true' if require_geofence else 'false' }};
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const phi1 = lat1 * Math.PI / 180;
+    const phi2 = lat2 * Math.PI / 180;
+    const dPhi = (lat2 - lat1) * Math.PI / 180;
+    const dLam = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dPhi/2)**2 + Math.cos(phi1)*Math.cos(phi2)*Math.sin(dLam/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+let verifiedLocationName = "Authorized Zone";
+
+// Monitor and verify GPS location
+if ("geolocation" in navigator) {
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            document.getElementById("latInput").value = lat;
+            document.getElementById("lonInput").value = lon;
+
+            const card = document.getElementById("locationStatusCard");
+            const spinner = document.getElementById("gpsSpinner");
+            const msg = document.getElementById("gpsStatusMessage");
+            spinner.classList.add("d-none");
+
+            let insideAny = false;
+            let closestLoc = null;
+            let minDist = Infinity;
+
+            if (activeLocations.length > 0) {
+                for (const loc of activeLocations) {
+                    const dist = haversineMeters(lat, lon, loc.latitude, loc.longitude);
+                    if (dist <= loc.radius_meters) {
+                        insideAny = true;
+                        closestLoc = loc;
+                        minDist = dist;
+                        break;
+                    }
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestLoc = loc;
+                    }
+                }
+            } else {
+                insideAny = true;
+            }
+
+            if (insideAny || !requireGeofence) {
+                verifiedLocationName = closestLoc ? closestLoc.name : "Authorized Zone";
+                card.className = "location-status-card bg-success bg-opacity-10 border border-success border-opacity-25 text-success";
+                msg.innerHTML = '<span class="fw-bold"><i class="fas fa-circle-check me-1"></i>Location Verified</span><div class="text-secondary small">' + verifiedLocationName + ' (' + Math.round(minDist === Infinity ? 0 : minDist) + 'm from center)</div>';
+                document.getElementById("submitBtn").disabled = false;
+            } else {
+                card.className = "location-status-card bg-danger bg-opacity-10 border border-danger border-opacity-25 text-danger";
+                msg.innerHTML = '<span class="fw-bold"><i class="fas fa-circle-xmark me-1"></i>Outside Attendance Perimeter</span><div class="text-muted small">' + Math.round(minDist) + 'm away from ' + (closestLoc ? closestLoc.name : 'campus') + ' (Allowed: ' + (closestLoc ? closestLoc.radius_meters : 100) + 'm)</div>';
+                document.getElementById("submitBtn").disabled = false;
+            }
+        },
+        function(err) {
+            const card = document.getElementById("locationStatusCard");
+            document.getElementById("gpsSpinner").classList.add("d-none");
+            card.className = "location-status-card bg-warning bg-opacity-10 border border-warning border-opacity-25 text-warning";
+            document.getElementById("gpsStatusMessage").innerHTML = '<span class="fw-bold"><i class="fas fa-triangle-exclamation me-1"></i>GPS Permission Required</span><div class="text-muted small">Please allow location access in your browser settings.</div>';
+            if (!requireGeofence) {
+                document.getElementById("submitBtn").disabled = false;
+            }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+} else {
+    document.getElementById("gpsStatusMessage").innerText = "Geolocation not supported by device.";
+}
+
+// Instant USN Lookup
+let usnTimer = null;
+document.getElementById("usnInput").addEventListener("input", function() {
+    clearTimeout(usnTimer);
+    const usn = this.value.trim().toUpperCase();
+    const verifiedCard = document.getElementById("verifiedStudentCard");
+    const regContainer = document.getElementById("registrationContainer");
+
+    if (usn.length < 3) {
+        verifiedCard.classList.add("d-none");
+        regContainer.classList.add("d-none");
+        return;
+    }
+
+    usnTimer = setTimeout(() => {
+        fetch("/api/check_usn?usn=" + encodeURIComponent(usn))
+            .then(r => r.json())
+            .then(data => {
+                if (data.exists) {
+                    verifiedCard.classList.remove("d-none");
+                    regContainer.classList.add("d-none");
+
+                    const name = data.user.name;
+                    document.getElementById("verifiedName").innerText = name;
+                    document.getElementById("verifiedDept").innerText = data.user.department || 'General';
+                    document.getElementById("verifiedDiv").innerText = 'Div ' + (data.user.division || '--');
+                    document.getElementById("verifiedSem").innerText = data.user.semester || '--';
+
+                    const initials = name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
+                    document.getElementById("avatarInitials").innerText = initials || 'ST';
+
+                    document.getElementById("nameInput").value = name;
+                    document.getElementById("deptSelect").value = data.user.department;
+                    document.getElementById("divSelect").value = data.user.division;
+                    document.getElementById("semSelect").value = data.user.semester;
+                } else {
+                    verifiedCard.classList.add("d-none");
+                    regContainer.classList.remove("d-none");
+                    document.getElementById("nameInput").setAttribute("required", "true");
+                    document.getElementById("deptSelect").setAttribute("required", "true");
+                    document.getElementById("divSelect").setAttribute("required", "true");
+                    document.getElementById("semSelect").setAttribute("required", "true");
+                }
+            });
+    }, 350);
+});
+
+function clearUSN() {
+    document.getElementById("usnInput").value = "";
+    document.getElementById("verifiedStudentCard").classList.add("d-none");
+    document.getElementById("registrationContainer").classList.add("d-none");
+    document.getElementById("usnInput").focus();
+}
+
+// Submission & Receipt Reveal
+document.getElementById("attendanceForm").onsubmit = function(e) {
+    e.preventDefault();
+    const btn = document.getElementById("submitBtn");
+    const banner = document.getElementById("alertBanner");
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Recording Attendance...';
+    banner.classList.add("d-none");
+
+    const formData = new FormData(this);
+    formData.append("device_id", getDeviceId());
+
+    fetch("/submit", {
+        method: "POST",
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === "success") {
+            // Smoothly reveal Digital Attendance Receipt
+            document.getElementById("mainFormView").classList.add("d-none");
+            const receipt = document.getElementById("successReceiptView");
+            receipt.classList.remove("d-none");
+
+            document.getElementById("recStudentName").innerText = data.student_name || document.getElementById("nameInput").value || "Student";
+            document.getElementById("recUSN").innerText = document.getElementById("usnInput").value.toUpperCase();
+            document.getElementById("recSession").innerText = data.session_title || "General Session";
+            document.getElementById("recLocation").innerHTML = '<i class="fas fa-location-dot text-primary me-1"></i>' + verifiedLocationName;
+
+            const badge = document.getElementById("recActionBadge");
+            if (data.action === "checkout") {
+                badge.className = "badge bg-info";
+                badge.innerText = "One-Time Checkout";
+                document.getElementById("receiptStatusSubtitle").innerText = "Check-out completed for today";
+                if (data.duration) {
+                    document.getElementById("recDurationRow").style.display = "flex";
+                    document.getElementById("recDuration").innerText = data.duration;
+                }
+            } else {
+                badge.className = "badge bg-success";
+                badge.innerText = "Check-in Confirmed";
+                document.getElementById("receiptStatusSubtitle").innerText = "Attendance verified & recorded";
+            }
+        } else if (data.status === "already_marked" || data.status === "already_done") {
+            banner.className = "alert alert-info border-0 shadow-sm mb-3 py-3 px-3 small rounded-3";
+            banner.innerHTML = '<i class="fas fa-circle-info fs-5 me-2 align-middle"></i>' + data.message;
+            banner.classList.remove("d-none");
+            btn.innerHTML = '<i class="fas fa-check me-1"></i>Already Recorded';
+        } else if (data.status === "new_user") {
+            banner.className = "alert alert-warning border-0 shadow-sm mb-3 py-2 px-3 small rounded-3";
+            banner.innerHTML = '<i class="fas fa-user-plus me-2"></i>' + data.message;
+            banner.classList.remove("d-none");
+            document.getElementById("registrationContainer").classList.remove("d-none");
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check-circle me-1"></i>Register & Submit';
+        } else {
+            banner.className = "alert alert-danger border-0 shadow-sm mb-3 py-2 px-3 small rounded-3";
+            banner.innerHTML = '<i class="fas fa-triangle-exclamation me-2"></i>' + data.message;
+            banner.classList.remove("d-none");
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-rotate-right me-1"></i>Try Again';
+        }
+    })
+    .catch(err => {
+        banner.className = "alert alert-danger border-0 shadow-sm mb-3 py-2 px-3 small rounded-3";
+        banner.innerHTML = '<i class="fas fa-triangle-exclamation me-2"></i>Connection error. Please retry.';
+        banner.classList.remove("d-none");
+        btn.disabled = false;
+        btn.innerHTML = 'Retry Scan';
+    });
+};
+</script>
+</body>
+</html>

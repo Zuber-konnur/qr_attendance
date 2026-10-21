@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Portal Login | Smart QR Attendance</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            background: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #070b14 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ambient-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(85px);
+            pointer-events: none;
+            opacity: 0.35;
+        }
+
+        .ambient-orb-1 {
+            width: 420px;
+            height: 420px;
+            background: var(--primary);
+            top: -60px;
+            right: -60px;
+        }
+
+        .ambient-orb-2 {
+            width: 380px;
+            height: 380px;
+            background: var(--secondary);
+            bottom: -60px;
+            left: -60px;
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            width: 100%;
+            max-width: 420px;
+            border-radius: 28px;
+            padding: 40px 32px;
+            box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5), 0 0 40px rgba(79, 70, 229, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            position: relative;
+            z-index: 1;
+        }
+
+        .login-icon {
+            width: 68px;
+            height: 68px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 28px;
+            box-shadow: 0 10px 25px rgba(79, 70, 229, 0.35);
+        }
+
+        .form-control {
+            border-radius: 14px;
+            padding: 13px 16px;
+            border: 1.5px solid #e2e8f0;
+            background-color: #f8fafc;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        .form-control:focus {
+            border-color: #4f46e5;
+            background-color: #ffffff;
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
+        }
+    </style>
+</head>
+<body>
+
+<div class="ambient-orb ambient-orb-1"></div>
+<div class="ambient-orb ambient-orb-2"></div>
+
+<div class="login-card">
+    <div class="login-icon">
+        <i class="fas fa-shield-halved"></i>
+    </div>
+
+    <div class="text-center mb-4">
+        <h4 class="fw-bold mb-1 text-dark" style="font-family: 'Outfit', sans-serif;">Admin Console</h4>
+        <p class="text-muted small">Enter master credentials to access system management</p>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger border-0 small py-2 px-3 rounded-3 mb-3 d-flex align-items-center">
+        <i class="fas fa-circle-exclamation me-2 fs-6"></i>
+        <div>{{ error }}</div>
+    </div>
+    {% endif %}
+
+    <form method="POST">
+        <div class="mb-3">
+            <label class="form-label small fw-bold text-secondary mb-1">ADMINISTRATOR PASSWORD</label>
+            <div class="input-group">
+                <input type="password" name="password" id="passwordInput" class="form-control" placeholder="••••••••" required autofocus>
+                <button class="btn btn-outline-secondary border-start-0 bg-white" type="button" onclick="togglePassword()">
+                    <i class="fas fa-eye text-muted" id="eyeIcon"></i>
+                </button>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary-modern w-100 py-3 rounded-3 mt-2">
+            <i class="fas fa-lock-open me-2"></i>Authorize & Enter
+        </button>
+    </form>
+
+    <div class="text-center mt-4 pt-3 border-top">
+        <a href="{{ url_for('public.index') }}" class="text-decoration-none small text-muted">
+            <i class="fas fa-arrow-left me-1"></i> Return to Live QR Display
+        </a>
+    </div>
+</div>
+
+<script>
+function togglePassword() {
+    const input = document.getElementById("passwordInput");
+    const icon = document.getElementById("eyeIcon");
+    if (input.type === "password") {
+        input.type = "text";
+        icon.className = "fas fa-eye-slash text-muted";
+    } else {
+        input.type = "password";
+        icon.className = "fas fa-eye text-muted";
+    }
+}
+</script>
+</body>
+</html>

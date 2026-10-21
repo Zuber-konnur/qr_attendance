@@ -1,416 +1,192 @@
-# 📱 Smart QR Attendance System
+# 📱 Enterprise Smart QR Attendance System
 
-An automated, location-aware, and anti-spoofing attendance tracking application built with **Flask**, **Supabase (PostgreSQL)**, and **Bootstrap 5**.
-
-The platform utilizes:
-- 🔐 Time-windowed OTP QR validation
-- 📍 GPS geofencing verification
-- 🛡️ Device fingerprint protection
-- ⚡ Real-time attendance state tracking
-
-This ensures highly secure and proxy-resistant attendance management for classrooms, labs, and institutional environments.
+A production-grade, database-agnostic, and anti-spoofing attendance automation platform built with **Python (Flask)**, **SQLAlchemy 2.0**, and modern **Bootstrap 5.3**.
 
 ---
 
-# 🚀 Features
+## 🌟 Key Features & Capabilities
 
-# 🏢 Student Check-in Features
+### 1. Dual Attendance Modes
+- **One-Time Session Attendance (Count Attendees)**: Designed for lectures, workshops, exams, or seminars where a single scan confirms presence and immediately computes the live attendee count.
+- **Check-in & One-Time Check-out (Full Day / Lab Mode)**: Enforces an explicit check-in and strictly **one-time check-out** (preventing multiple check-outs or checking out before check-in), calculating total duration automatically.
 
-## 🔄 Dynamic QR Validation
+### 2. Comprehensive Student Attributes & Dynamic Custom Fields
+- Core student fields: **USN**, **Name**, **Department**, **Division**, and **Semester**.
+- **Dynamic Custom Fields Builder**: Administrators can add custom registration fields (e.g. Mobile Number, Seat Number, Guardian Contact) with customizable input types (Text, Number, Dropdown) and validation rules.
+- **Dynamic Lookups**: Administrators can dynamically add and manage Departments, Divisions, and Semesters from the Admin Console.
 
-The system generates secure rotating QR tokens using **TOTP (Time-Based One-Time Passwords)**.
+### 3. Multi-Location Geofencing with Radius Perimeter
+- Multiple attendance zones can be created with precise center GPS coordinates (`latitude`, `longitude`) and a custom radius in meters (e.g., 50m, 100m, 200m).
+- Each location can be dynamically **Enabled** or **Disabled** with a single click.
+- Includes a **"🎯 Use My Current GPS Position"** one-click tool in the admin console.
+- Global geofencing enforcement can be toggled On or Off.
 
-### Security Characteristics
-- Tokens expire every **30 seconds**
-- Prevents:
-  - Static QR reuse
-  - Screenshot forwarding
-  - Shared attendance links
+### 4. Database-Agnostic Engine (SQLite, PostgreSQL, MySQL)
+- Seamlessly transition between database engines simply by updating `DATABASE_URL` in `.env`:
+  - **SQLite** (Default, zero-setup local storage for testing and edge deployments)
+  - **PostgreSQL / Supabase** (Enterprise cloud or hosted database)
+  - **MySQL** (Traditional institutional infrastructure)
+- Automated schema creation and lookup data seeding on initial run.
 
----
+### 5. Advanced Export Studio
+- Export attendance records filtered by:
+  - **Date Range** (From Date to To Date)
+  - **Department** (e.g. CSE, ISE, AIML, ECE, MECH, CIVIL)
+  - **Division** (e.g. Div A, Div B, Div C)
+  - **Semester** (e.g. Sem 1 through Sem 8)
+  - **Session** (Specific class or lecture)
+- **Formats Available**:
+  - 📊 **Styled Excel (.xlsx)**: Formatted table with dark headers, alternating row colors, auto-fit column widths, and duration metrics.
+  - 📄 **Clean CSV (.csv)**: Clean comma-separated export suitable for ERP or data analysis.
 
-## 📍 Geofencing (GPS Verification)
+### 6. Mobile-First Responsive Interface
+- Optimized for mobile phone screens with touch-friendly input fields and floating status pills.
+- Instant USN auto-fill: When a registered student types their USN, their name, department, division, and semester are instantly recognized.
+- Live GPS radar indicator providing real-time perimeter distance feedback.
 
-Student GPS coordinates are validated against a predefined classroom polygon using the **Ray-Casting algorithm**.
-
-### Validation Flow
-- Device location acquired from browser
-- Coordinates checked against classroom bounds
-- Outside users are rejected automatically
-
----
-
-## 🛡️ Anti-Proxy Protection
-
-Each device generates a unique secure `device_id` using:
-- Browser cookies
-- LocalStorage persistence
-- Hardware/browser metadata
-
-### Protection Logic
-- One physical device cannot mark attendance for multiple students on the same day
-- Prevents:
-  - Proxy attendance
-  - Shared mobile check-ins
-  - Multi-user spoofing
-
----
-
-## 👤 Dynamic Registration
-
-First-time users are automatically redirected to complete registration:
-
-### Registration Fields
-- Name
-- USN
-- Domain
-- Batch
+### 7. Anti-Proxy & Hardware Binding Protection
+- **TOTP QR Code**: QR code rotates every 30 seconds using RFC 6238 time-based tokens, defeating static screenshots and shared links.
+- **1-Device-1-User Daily Binding**: Devices are fingerprinted using combined browser cookies and `localStorage` UUIDs, preventing one smartphone from checking in multiple students.
 
 ---
 
-# 🛠️ Admin Dashboard Features
-
-## 📌 Attendance State Tracking
-
-The system supports 4 attendance windows:
-
-| State | Allowed Time |
-|---|---|
-| Morning Login | Up to 13:30 |
-| Lunch Start | 13:20 – 13:50 |
-| Lunch End | 14:15 – 14:45 |
-| Final Logout | 16:00 onwards |
-
----
-
-## ⚙️ Governance Controls
-
-Admins can dynamically enable or disable:
-
-- Strict working-hour enforcement
-- Lunch breakout compliance tracking
-- Minimum 7-hour attendance calculation
-
----
-
-## 📊 Data & Roster Processing
-
-### Bulk CSV User Import
-- Automatic upsert handling
-- Duplicate-safe ingestion
-- Metadata preservation
-
-### Export Modes
-- Full Logs
-- Basic Logs + Remarks
-- Attendance Status Grid
-
----
-
-# 🏗️ System Architecture & Workflow
+## 🏗️ System Architecture
 
 ```text
-[ Dynamic QR Display ]
-          |
-          v
-[ Student Device Scan ]
-          |
-          v
-[ GPS + Device Validation ]
-          |
-          v
-[ Secure POST Handshake ]
-          |
-          v
-[ Validation Pipeline ]
-   ├── OTP Verification
-   ├── Device Validation
-   ├── Geofence Check
-   └── Time Window Allocation
-          |
-          v
-[ Attendance Database ]
+[ Classroom Display Screen: / ]  <--->  Auto-refreshing 30s TOTP QR Payload
+            |
+       (Scan with Phone)
+            v
+[ Mobile Check-in App: /checkin ]
+  ├── 🛰️ Browser GPS Geofence Check (Perimeter Radius)
+  ├── 📱 Persistent Device ID Fingerprint
+  └── 🆔 USN Auto-Lookup & Dynamic Registration
+            |
+            v
+[ Flask Backend Engine: /submit ]
+  ├── 🔐 PyOTP Token Window Verification
+  ├── 🛡️ Anti-Proxy Hardware Collision Check
+  ├── 📍 Multi-Location Haversine Distance Check
+  └── ⚡ State Machine (One-Time Count vs Check-in / One-Time Checkout)
+            |
+            v
+[ Multi-Database Layer (SQLAlchemy ORM) ]
+  ├── SQLite (Default: sqlite:///attendance.db)
+  ├── PostgreSQL / Supabase (postgresql://...)
+  └── MySQL (mysql+pymysql://...)
 ```
 
 ---
 
-# 🔄 Core Workflow
+## 📦 Installation & Setup (Using Virtual Environment)
 
-## 1️⃣ Display Portal (`/`)
-A public display route streams:
-- Rotating QR payloads
-- 30-second secure TOTP windows
-
----
-
-## 2️⃣ Scan Handshake (`/checkin`)
-The client device:
-- Verifies GPS coordinates
-- Captures secure device identifiers
-- Sends encrypted attendance payloads
-
----
-
-## 3️⃣ Evaluation Loop (`/submit`)
-The backend executes:
-
-### Validation Pipeline
-- Token integrity validation (`t ± 30s`)
-- Device spoof prevention
-- Polygon geofence calculation
-- Attendance slot mapping
-
----
-
-# 🗄️ Database Schema
-
-The backend uses **Supabase PostgreSQL**.
-
-Execute the following SQL inside the Supabase SQL Editor.
-
-```sql
--- 1. System Lists Tables
-CREATE TABLE IF NOT EXISTS domains (
-    name TEXT PRIMARY KEY
-);
-
-CREATE TABLE IF NOT EXISTS batches (
-    name TEXT PRIMARY KEY
-);
-
--- Insert Initial Starter Data
-INSERT INTO domains (name) VALUES 
-    ('Java Fullstack'), 
-    ('Data Science'), 
-    ('MERN Stack'), 
-    ('Python Fullstack') 
-ON CONFLICT (name) DO NOTHING;
-
-INSERT INTO batches (name) VALUES 
-    ('2024-Morning'), 
-    ('2024-Evening') 
-ON CONFLICT (name) DO NOTHING;
-
--- 2. Users Table
-CREATE TABLE IF NOT EXISTS users (
-    usn TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    domain TEXT,
-    batch TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- 3. Attendance Log Table
-CREATE TABLE IF NOT EXISTS attendance (
-    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-    usn TEXT REFERENCES users(usn),
-    date DATE NOT NULL DEFAULT CURRENT_DATE,
-    login_time TIME,
-    lunch_start TIME,
-    lunch_end TIME,
-    logout_time TIME,
-    status TEXT DEFAULT 'On Duty',
-    remarks TEXT,
-    device_id TEXT,
-    UNIQUE(usn, date)
-);
-
--- 4. Admin Settings Table
-CREATE TABLE IF NOT EXISTS admin_settings (
-    setting_key TEXT PRIMARY KEY,
-    setting_value BOOLEAN DEFAULT TRUE
-);
-
--- Insert Default Admin Rules
-INSERT INTO admin_settings (setting_key, setting_value) VALUES 
-    ('strict_lunch', TRUE),
-    ('require_minimum_hours', TRUE)
-ON CONFLICT (setting_key) DO NOTHING;
-
-NOTIFY pgrst, 'reload schema';
-```
-
----
-
-# ⚙️ Environment Configuration
-
-Create a `.env` file in the root directory:
-
-```env
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_KEY=your_supabase_service_role_or_anon_key
-
-SHARED_SECRET=JBSWY3DPEHPK3PXP
-ADMIN_PASSWORD=admin123
-SECRET_KEY=your_flask_session_secret_key
-
-REQUIRED_HOURS=7
-```
-
----
-
-# 📍 Classroom Geofence Configuration
-
-Modify the classroom boundary polygon directly in:
-
-```text
-app.py
-```
-
-Update the coordinates under:
-
-```python
-CLASSROOM_POLYGON = [
-    (...),
-    (...),
-    (...)
-]
-```
-
----
-
-# 📦 Installation & Setup
-
-## 1️⃣ Clone Repository
-
+### 1. Clone & Enter Directory
 ```bash
 git clone <repository-url>
-
 cd qr_attendance
 ```
 
----
+### 2. Activate Virtual Environment
+```bash
+# Windows (PowerShell)
+.\venv\Scripts\Activate.ps1
 
-## 2️⃣ Install Dependencies
+# Windows (Command Prompt)
+.\venv\Scripts\activate.bat
 
+# Linux / macOS
+source venv/bin/activate
+```
+
+*(If creating a new virtual environment: `python -m venv venv`)*
+
+### 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
 ---
 
-## 3️⃣ Run Application
+## ⚙️ Database Configuration (`.env`)
 
+Create or edit your `.env` file in the project root:
+
+```env
+# Choose your database by setting DATABASE_URL:
+
+# Option A: Local SQLite (Zero setup, default)
+DATABASE_URL=sqlite:///attendance.db
+
+# Option B: PostgreSQL / Supabase
+# DATABASE_URL=postgresql://postgres:your_password@localhost:5432/attendance_db
+
+# Option C: MySQL
+# DATABASE_URL=mysql+pymysql://root:your_password@localhost:3306/attendance_db
+
+# Security & Admin Settings
+SECRET_KEY=change_this_to_a_random_secure_key
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=admin123
+
+# TOTP & Geofence Defaults
+SHARED_SECRET=JBSWY3DPEHPK3PXP
+TOTP_INTERVAL=30
+TIMEZONE=Asia/Kolkata
+DEFAULT_GEOFENCE_RADIUS=100.0
+```
+
+---
+
+## ▶️ Running the Application
+
+Start the local server:
 ```bash
 python app.py
 ```
 
----
-
-# ▶️ Local Development Server
-
-Application starts locally at:
-
-```text
-http://localhost:5000
-```
+Access the application in your browser:
+- 📱 **Live Dynamic QR Display Screen**: [http://localhost:5000/](http://localhost:5000/)
+- 📍 **Student Mobile Check-in Page**: [http://localhost:5000/checkin](http://localhost:5000/checkin)
+- 🔐 **Admin Management Console**: [http://localhost:5000/admin/login](http://localhost:5000/admin/login)
+  - Default Password: `admin123` *(configurable in `.env`)*
 
 ---
 
-# 📊 Bulk User CSV Import
+## 📊 Bulk Student Roster Import
 
-Upload CSV files using the following structure:
+To bulk-import students, navigate to **Admin Console -> Bulk Import** and upload a `.csv` file formatted as follows:
 
 ```csv
-USN,Name,Domain,Batch
-4SF21CS001,Rahul,Data Science,2024-Morning
-4SF21CS002,Aisha,MERN Stack,2024-Evening
+USN,Name,Department,Division,Semester,phone
+4SF21CS001,Rahul Sharma,CSE,A,Sem 5,9876543210
+4SF21CS002,Aisha Khan,ISE,B,Sem 5,9876543211
+4SF21CS003,Imran Patel,AIML,A,Sem 3,9876543212
+4SF21CS004,Sneha Rao,ECE,C,Sem 7,9876543213
+4SF21CS005,Vikram Verma,MECH,A,Sem 1,9876543214
+```
+
+> **Note**: New departments, divisions, and semesters in the CSV will be automatically registered in the system during ingestion!
+
+---
+
+## 🧪 Running Automated Unit Tests
+
+Execute the automated test suite to verify one-time attendance, check-in / check-out, anti-proxy binding, geofencing, and export generation:
+
+```bash
+# Run Core System Tests
+python test_attendance_system.py
+
+# Run Web Routes & API Tests
+python test_web_routes.py
 ```
 
 ---
 
-# 🧠 Import Engine Features
+## 🛡️ Security Architecture Summary
 
-The CSV processing pipeline automatically:
-- Removes duplicates
-- Performs safe upserts
-- Preserves historical attendance data
-- Validates malformed rows
-- Maps structural metadata
-
----
-
-# 🔐 Security Features
-
-## OTP Security
-- Rotating TOTP QR validation
-- Shared secret authentication
-- Replay attack prevention
-
----
-
-## Device Integrity
-- Persistent device fingerprinting
-- Daily hardware binding restrictions
-
----
-
-## Geolocation Protection
-- Polygon-based coordinate validation
-- Browser GPS enforcement
-
----
-
-# ⚡ Technology Stack
-
-## Backend
-- Flask
-- Supabase
-- PostgreSQL
-
-## Frontend
-- Bootstrap 5
-- HTML5
-- JavaScript
-
-## Security & Validation
-- TOTP Authentication
-- Device Fingerprinting
-- Ray-Casting Geofencing
-- Secure Session Cookies
-
----
-
-# 📈 Future Enhancements
-
-- [ ] Face recognition integration
-- [ ] NFC attendance support
-- [ ] Mobile app deployment
-- [ ] Analytics dashboard
-- [ ] Multi-campus geofence support
-- [ ] Real-time admin alerts
-- [ ] Docker deployment
-- [ ] Attendance heatmaps
-
----
-
-# 🧪 Example Use Cases
-
-- College attendance systems
-- Corporate training programs
-- Internship tracking
-- Classroom session validation
-- Workshop participation management
-
----
-
-# 📜 License
-
-This project is intended for:
-- Educational use
-- Research demonstrations
-- Secure attendance automation
-
-Review and customization are recommended before production deployment.
-
----
-
-# 👨‍💻 Developer Notes
-
-The system prioritizes:
-- Attendance authenticity
-- GPS-aware validation
-- Secure QR workflows
-- Device-level anti-spoofing
-
-The architecture is optimized for lightweight deployment and scalable institutional integration.
+1. **RFC 6238 TOTP Validation**: QR tokens rotate every 30 seconds with a strict 1-step window tolerance.
+2. **Ray-Casting & Haversine Distance**: Exact distance calculations against active institutional perimeters.
+3. **Hardware Anti-Proxy**: Cookies and LocalStorage persistent hardware UUIDs guarantee 1 device can only submit for 1 student per session.
+4. **Password Hashing**: Secure PBKDF2/SHA256 password hashing replaces plain-text comparisons.
+5. **Connection Management**: Scoped SQLAlchemy sessions automatically clean up and return connections to the pool on teardown.
