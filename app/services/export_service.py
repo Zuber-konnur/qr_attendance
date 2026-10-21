@@ -1,13 +1,13 @@
 import io
 import pandas as pd
-from datetime import datetime
+from sqlalchemy import func
 from app.database import db_session
 from app.models import Attendance, AttendanceSession, User, DynamicField
 
 class ExportService:
     @staticmethod
     def query_attendance(date_from=None, date_to=None, department="All", division="All",
-                         semester="All", session_id="All", search=""):
+                         semester="All", session_id="All", search="", page=None, per_page=25):
         query = db_session.query(Attendance).join(User, Attendance.usn == User.usn).join(
             AttendanceSession, Attendance.session_id == AttendanceSession.id
         )
@@ -31,7 +31,17 @@ class ExportService:
             search_term = f"%{search.strip()}%"
             query = query.filter((User.usn.ilike(search_term)) | (User.name.ilike(search_term)))
 
-        return query.order_by(Attendance.date.desc(), Attendance.checkin_time.desc()).all()
+        # Always order by latest scan activity on top (most recent checkout or checkin first, then highest ID)
+        latest_activity = func.coalesce(Attendance.checkout_time, Attendance.checkin_time)
+        query = query.order_by(Attendance.date.desc(), latest_activity.desc(), Attendance.id.desc())
+
+        if page is not None:
+            total = query.count()
+            offset = max(0, (page - 1) * per_page)
+            items = query.limit(per_page).offset(offset).all()
+            return items, total
+
+        return query.all()
 
     @classmethod
     def generate_dataframe(cls, records):

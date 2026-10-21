@@ -95,21 +95,69 @@ def admin_dashboard():
     active_session_setting = db_session.query(SystemSetting).filter_by(setting_key="active_session_id").first()
     active_session_id = int(active_session_setting.setting_value) if (active_session_setting and active_session_setting.setting_value) else None
 
-    records = ExportService.query_attendance(
+    # Attendance Stream Pagination & Filters
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 25, type=int)
+    if per_page not in [10, 15, 25, 50, 100]:
+        per_page = 25
+
+    records, total_records = ExportService.query_attendance(
         date_from=filter_date,
         date_to=filter_date,
         department=filter_dept,
         division=filter_div,
         semester=filter_sem,
         session_id=filter_session,
-        search=search
+        search=search,
+        page=page,
+        per_page=per_page
     )
+    total_pages = max(1, (total_records + per_page - 1) // per_page)
+
+    # Students Directory Pagination & Filters
+    student_page = request.args.get("student_page", 1, type=int)
+    student_per_page = request.args.get("student_per_page", 20, type=int)
+    if student_per_page not in [10, 20, 50, 100]:
+        student_per_page = 20
+    student_search = request.args.get("student_search", "").strip()
+    student_dept = request.args.get("student_dept", "All")
+    student_div = request.args.get("student_div", "All")
+    student_sem = request.args.get("student_sem", "All")
+
+    sq = db_session.query(User)
+    if student_search:
+        st = f"%{student_search}%"
+        sq = sq.filter((User.usn.ilike(st)) | (User.name.ilike(st)))
+    if student_dept and student_dept != "All":
+        sq = sq.filter(User.department == student_dept)
+    if student_div and student_div != "All":
+        sq = sq.filter(User.division == student_div)
+    if student_sem and student_sem != "All":
+        sq = sq.filter(User.semester == student_sem)
+
+    total_students_filtered = sq.count()
+    total_student_pages = max(1, (total_students_filtered + student_per_page - 1) // student_per_page)
+    student_offset = max(0, (student_page - 1) * student_per_page)
+    students_list = sq.order_by(User.created_at.desc(), User.usn.asc()).limit(student_per_page).offset(student_offset).all()
 
     db_info = get_db_info()
 
     return render_template(
         "admin_dashboard.html",
         records=records,
+        total_records=total_records,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        students=students_list,
+        total_students_filtered=total_students_filtered,
+        student_page=student_page,
+        student_per_page=student_per_page,
+        total_student_pages=total_student_pages,
+        student_search=student_search,
+        student_dept=student_dept,
+        student_div=student_div,
+        student_sem=student_sem,
         total_users=total_users,
         today_records_count=today_records_count,
         active_locs_count=active_locs_count,
@@ -130,6 +178,20 @@ def admin_dashboard():
         search=search,
         db_info=db_info
     )
+
+@admin_bp.route("/students/delete", methods=["POST"])
+@login_required
+def admin_delete_student():
+    data = request.get_json() or {}
+    usn = data.get("usn")
+    if usn:
+        user = db_session.query(User).filter_by(usn=usn).first()
+        if user:
+            db_session.query(Attendance).filter_by(usn=user.usn).delete()
+            db_session.delete(user)
+            db_session.commit()
+            return jsonify({"status": "success", "message": "Student record deleted successfully"})
+    return jsonify({"status": "error", "message": "Student record not found"}), 404
 
 # ----------------- SESSION MANAGEMENT -----------------
 
